@@ -150,6 +150,51 @@ st.sidebar.caption("Signals use finished bars only, daily bars included. Free Ya
                    "several minutes delayed.")
 
 
+# A small easter egg at the bottom of the sidebar: hover the bill for a note, click it for a little "ka-ching".
+# The sound is generated in the browser (no audio file, nothing downloaded).
+def money_egg():
+    import streamlit.components.v1 as components
+
+    components.html("""
+<style>
+  body { margin: 0; font-family: -apple-system, Segoe UI, sans-serif; color: #888; text-align: center; }
+  #bill { font-size: 34px; cursor: pointer; display: inline-block; transition: transform .15s; user-select: none; }
+  #bill:hover { transform: rotate(-8deg) scale(1.2); }
+  #msg { font-size: 12px; line-height: 1.35; max-height: 0; opacity: 0; overflow: hidden; transition: all .25s; padding: 0 4px; }
+  #wrap:hover #msg { max-height: 90px; opacity: 1; margin-top: 4px; }
+  #sm { font-size: 10px; opacity: .8; margin-top: 3px; }
+</style>
+<div id="wrap">
+  <div id="bill" title="Click me">💵</div>
+  <div id="msg">Opportunities are everywhere.<br>Stay patient, keep it small, let your stops do their job.
+    <div id="sm">♪ A nod to the Pet Shop Boys' &ldquo;Opportunities (Let's Make Lots of Money)&rdquo;</div></div>
+</div>
+<script>
+let ctx = null;
+document.getElementById("bill").onclick = () => {
+  try {
+    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    const t = ctx.currentTime;
+    [[1318.5, 0, .12], [1760, .11, .45]].forEach(([f, d, len]) => {      // a bright two-note "ka-ching"
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = "triangle"; o.frequency.value = f;
+      g.gain.setValueAtTime(0, t + d); g.gain.linearRampToValueAtTime(.25, t + d + .01);
+      g.gain.exponentialRampToValueAtTime(.001, t + d + len);
+      o.connect(g); g.connect(ctx.destination); o.start(t + d); o.stop(t + d + len + .05);
+    });
+  } catch (e) {}
+};
+</script>""", height=118)
+
+
+try:
+    with st.sidebar:
+        st.divider()
+        money_egg()
+except Exception:
+    pass
+
+
 # ====================================================================== helpers
 @st.cache_data(ttl=20, show_spinner=False)
 def fetch(tkr, period, intv):

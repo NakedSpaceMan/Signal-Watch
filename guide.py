@@ -3,6 +3,14 @@ guide.py - the Guide tab: what every box and slider in the left sidebar does, an
 after a long break. Plain text only, so it is safe to edit.
 """
 
+PRIVACY = (
+    "**Your data is yours.** No accounts, no ads, no tracking, and no big corporation getting a cut of your trading life. "
+    "Your trades, settings, account size and notes live in files on your own computer, and the app never uploads or sends "
+    "them anywhere. The only things that go out are requests for public prices, news and earnings dates from Yahoo Finance "
+    "for the tickers you look up (Yahoo can see those lookups). Usage statistics are switched off. If you use the "
+    "'Copy for Claude' button, your headlines only leave your computer if you paste them into a chat yourself."
+)
+
 QUICK_START = [
     "Open the **Today** tab and work down the checklist. It tells you what to do in order.",
     "Look at the **Market weather** banner at the top. Sunny = good time to look for trades, Stormy = consider waiting.",
@@ -146,6 +154,7 @@ FILES = ("Your real trades are stored in signal_ledger.db, practice trades in si
 
 
 def show(st):
+    st.info(PRIVACY)
     st.subheader("How to use Signal Watch")
     st.caption("Come back here any time. Not financial advice: the signals are clues, not orders, and they are often wrong.")
     st.markdown("#### Quick start (also good after a long break)")
