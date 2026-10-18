@@ -1,0 +1,12 @@
+# Your own data: never commit these
+signal_ledger.db
+signal_practice.db
+signal_settings.json
+*.db
+# Python / environment
+.venv/
+__pycache__/
+*.pyc
+# OS files
+.DS_Store
+Thumbs.db
