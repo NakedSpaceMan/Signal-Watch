@@ -522,6 +522,20 @@ def _explain(chart, res):
     else:
         lines.append(f"**Stop check:** your stop was about {risk_u / entry * 100:.1f}% below your entry, close to where the pattern "
                      "says you are wrong. Good.")
+
+    reward_u, reward_t = tu - entry, p["target"] - entry
+    peak = f"In your trade's window price peaked at ${hi:,.2f} ({(hi - entry) / entry * 100:+.1f}% from entry)."
+    if reward_u < 0.7 * reward_t:
+        lines.append(f"**Target check:** yours was about {reward_u / entry * 100:.1f}% above your entry; a sensible target for this "
+                     f"setup was about {reward_t / entry * 100:.1f}% (${p['target']:,.2f}). A target that near locks in a small win "
+                     f"and may leave profit on the table. {peak}")
+    elif reward_u > 1.5 * reward_t:
+        lines.append(f"**Target check:** yours was about {reward_u / entry * 100:.1f}% above your entry; a sensible target was about "
+                     f"{reward_t / entry * 100:.1f}% (${p['target']:,.2f}). A target that far is rarely reached before the move "
+                     f"runs out of steam. {peak}")
+    else:
+        lines.append(f"**Target check:** yours was about {reward_u / entry * 100:.1f}% above your entry, close to a sensible "
+                     f"target of about {reward_t / entry * 100:.1f}% (${p['target']:,.2f}). Good. {peak}")
     return lines
 
 
@@ -545,8 +559,8 @@ def _play(seed):
     res = {"seed": seed, "kind": kind, "action": action, "hint": bool(ss.get(f"lrn_hint_{seed}"))}
     if action.startswith("Buy"):
         entry = p["entry"]
-        stop = float(ss.get(f"lrn_ps_{seed}", 0.0))
-        target = float(ss.get(f"lrn_pt_{seed}", 0.0))
+        stop = float(ss.get(f"lrn_ps_{seed}") or 0.0)
+        target = float(ss.get(f"lrn_pt_{seed}") or 0.0)
         if not (0 < stop < entry < target):
             return          # the form already explains this; nothing is played or scored
         out = lc.simulate_plan(chart["fut"], entry, stop, target)
@@ -606,20 +620,24 @@ def _practice_view(risk_dollars):
         ok = True
         if buying:
             b1, b2 = st.columns(2)
-            stop_v = b1.number_input("Your stop price ($)", min_value=0.01, value=round(last * 0.95, 2), step=0.05,
+            stop_v = b1.number_input("Your stop price ($)", min_value=0.01, value=None, placeholder="Type a price", step=0.05,
                                      format="%.2f", key=f"lrn_ps_{seed}",
                                      help="If price falls to this, you sell and take the loss. Put it just beyond a level "
                                           "that would prove your idea wrong.")
-            tgt_v = b2.number_input("Your target price ($)", min_value=0.01, value=round(last * 1.08, 2), step=0.05,
+            tgt_v = b2.number_input("Your target price ($)", min_value=0.01, value=None, placeholder="Type a price", step=0.05,
                                     format="%.2f", key=f"lrn_pt_{seed}",
                                     help="If price rises to this, you sell and take the profit. A spot where sellers have "
                                          "shown up before, or a multiple of your risk.")
-            risk, reward = last - stop_v, tgt_v - last
-            if stop_v > last * 0.99 or tgt_v < last * 1.01:
+            if stop_v is None or tgt_v is None:
+                ok = False
+                st.info(_md(f"Last close ${last:,.2f}. Type your own stop (below it) and target (above it), then press Enter. "
+                            "Look at the chart for the levels you would use."))
+            elif stop_v > last * 0.99 or tgt_v < last * 1.01:
                 ok = False
                 st.error(_md(f"Your stop must be below the last close (${last:,.2f}) and your target above it, each by at least 1%. "
                              "You would buy at about the last close."))
             else:
+                risk, reward = last - stop_v, tgt_v - last
                 rr = reward / risk
                 st.caption(_md(
                     f"Last close ${last:,.2f}. Risk ${risk:,.2f} per share ({risk / last * 100:.1f}%), reward ${reward:,.2f} "
@@ -627,10 +645,9 @@ def _practice_view(risk_dollars):
                     f"{100 / (1 + rr):.0f}% of trades like this to break even."
                     + (f" If you risked ${risk_dollars:,.2f}, a full win would be about ${risk_dollars * rr:,.2f}."
                        if risk_dollars else "")
-                    + ((" " + _cone_note(cone, stop_v, tgt_v)) if cone else "")))
+                    ))
                 if rr < 1:
                     st.warning("Your target is closer than your stop. You would need to win more than half your trades just to break even.")
-            st.caption("Type a price, then press Enter.")
         h1, h2 = st.columns([1, 3])
         used = bool(ss.get(f"lrn_hint_{seed}"))
         h1.button("Show one hint" if not used else "Hint used", key=f"lrn_hintbtn_{seed}", on_click=_use_hint, args=(seed,),
