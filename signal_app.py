@@ -533,18 +533,6 @@ with tab_today:
         st.rerun()
     if n_done == len(items):
         st.success("Checklist complete. Following your routine is the habit that matters most. Great job.")
-    st.markdown("**One thing I did well " + ("this week" if today.weekday() >= 5 else "today") + "**")
-    note_text = st.text_area("Write it here", value=store.day_note(day), key=f"note_{day}", height=80,
-                             label_visibility="collapsed")
-    if st.button("Save this"):
-        store.set_day_note(day, note_text)
-        st.success("Saved. Small wins count.")
-    wins_log = store.day_notes((today - pd.Timedelta(days=14)).strftime("%Y-%m-%d"),
-                               (today + pd.Timedelta(days=1)).strftime("%Y-%m-%d"))
-    if wins_log:
-        with st.expander("Your recent wins"):
-            for d_, n_ in sorted(wins_log.items(), reverse=True):
-                st.markdown(f"- **{d_}:** {n_}")
 
 # ====================================================================== SCANNER TAB
 SWING = "Swing setups (check once a day)"
@@ -1460,12 +1448,6 @@ with tab_week:
                                   "Details": h["message"]} for h in rev["habits"]]))
     st.caption("R means the amount you planned to risk on a trade. +2R is twice that in profit; -1R is a loss "
                "of what you planned.")
-
-    notes_wk = store.day_notes(wk.strftime("%Y-%m-%d"), (wk + pd.Timedelta(days=7)).strftime("%Y-%m-%d"))
-    if notes_wk:
-        st.markdown("#### Wins you wrote down this week")
-        for d_, n_ in notes_wk.items():
-            st.markdown(f"- **{d_}:** {n_}")
 
     trades_wk = rev["trades"]
     if len(trades_wk):

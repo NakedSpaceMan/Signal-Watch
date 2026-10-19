@@ -36,15 +36,12 @@ TRADING_DAY = [
      "If I bought: place the stop order right away, then record the trade here with its stop and target."),
     ("close", "End of day",
      "Near the close: record any fills and update my Account value in the sidebar."),
-    ("win", "End of day",
-     "Write down one thing I did well today (box below)."),
 ]
 
 WEEKEND = [
     ("w_review", "Weekend reset", "Open the Weekly review tab and read it."),
     ("w_lessons", "Weekend reset", "Write what I learned on each finished trade (Weekly review tab)."),
     ("w_weather", "Weekend reset", "Check the Market weather and decide how bold to be next week."),
-    ("w_win", "Weekend reset", "Write down one thing I did well this week (box below)."),
 ]
 
 
