@@ -8,7 +8,7 @@ read from the last three months of daily data, including an earnings check and a
 > through the unofficial `yfinance` library, so it can be delayed, wrong or missing. The app **never connects to a
 > brokerage and never places orders**. Your trades and settings stay in files on your own computer.
 
-## What it does
+## First things first
 
 When you open the app, the start screen asks whether you want **Stocks** or **Crypto**. Each is its own environment with its own trades and settings.
 
