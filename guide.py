@@ -35,8 +35,8 @@ TABS = [
     ("Weekly review", "A look back at the week with praise for good habits and one thing to improve. Add a lesson "
                       "to each finished trade."),
     ("Backtest & history", "Test the swing rules on past prices, and see how past scan picks performed."),
-    ("Learn", "Lessons on reading a chart and trading support and resistance, bounces, breakouts, pullbacks, flags and "
-              "triangles, each on a made-up chart with every level marked and a quiz. Practice mode shows an unmarked chart: "
+    ("Learn", "Lessons on reading a chart and trading support and resistance, bounces, breakouts, pullbacks, flags, triangles, double bottoms, cup and handles and "
+              "when to stay out, each on a made-up chart with every level marked and a quiz. Practice mode shows an unmarked chart: "
               "you choose buy or skip and type your own stop and target prices (one hint is available per chart), then it plays out and scores you. The shaded likely-range cone is shown on the Learn charts too, so you can see how far a stock could wander before you place a stop or target. No real money and "
               "nothing is saved to your ledger."),
     ("Guide", "This page."),

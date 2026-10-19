@@ -189,10 +189,52 @@ LESSONS = {
             dict(q="What should volume do as the triangle tightens, and on the breakout?", options=[
                 "Dry up, then jump on the breakout", "Rise the whole time", "It does not matter"],
                  answer=0, why="Quiet squeeze, then a burst of volume shows the buyers have taken over.")]),
+    "double": dict(
+        kind="double", title="8. The double bottom", tagline="A 'W' shape: price tests the same low twice and fails to go lower.",
+        idea=("After a long fall, price makes a low, bounces, then drops back to about the **same low** and holds. The shape looks "
+              "like a **W**. The second test on lighter volume says the sellers are used up. The trade comes when price closes "
+              "above the **neckline**, the high of the bounce in the middle of the W."),
+        spot=["A clear downtrend or long fall first.",
+              "Two lows at about the same price (within a couple of percent).",
+              "Lighter volume on the second low.",
+              "A strong close above the neckline on a burst of volume."],
+        trade=dict(entry="Buy the next open after price closes above the neckline.",
+                   stop="Just under the neckline (or, more cautiously, under the second bottom).",
+                   target="2 times your risk."),
+        mistakes=["Buying at the second low before it has proved anything. Wait for the neckline break.",
+                  "Calling two unrelated dips a double bottom. The lows should be close to each other in price."],
+        quiz=[
+            dict(q="Where does a double bottom give its buy signal?", options=["At the first low", "When price closes above the neckline",
+                                                                              "At the second low"],
+                 answer=1, why="The neckline break is the confirmation. Until then it is only a hope."),
+            dict(q="What does lighter volume on the second low suggest?", options=["Sellers are running out", "Buyers are gone",
+                                                                                  "Nothing at all"],
+                 answer=0, why="The sellers who panicked at the first low are already out, so the second test has less push behind it.")]),
+    "cup": dict(
+        kind="cup", title="9. Cup and handle", tagline="A rounded dip, a climb back to the rim, then a small pause before the move.",
+        idea=("A **cup and handle** starts with a rounded, U-shaped dip (not a crash), then price climbs back to where it started "
+              "(the **rim**). It pauses with a small, shallow dip on light volume (the **handle**). A close above the rim on strong "
+              "volume is the signal. The slow rounded shape shows selling fading gradually, not in a panic."),
+        spot=["A rounded bottom, not a sharp V.",
+              "Price returns to about where the dip began (the rim).",
+              "A short, shallow dip after that (the handle), on light volume.",
+              "A close above the rim on a burst of volume."],
+        trade=dict(entry="Buy the next open after a strong close above the rim.",
+                   stop="Under the low of the handle. If that breaks, the pattern failed.",
+                   target="2 times your risk."),
+        mistakes=["Calling any dip a cup. A cup is smooth and rounded and takes weeks.",
+                  "A handle that dips too deep (more than about a third of the cup) is a warning sign."],
+        quiz=[
+            dict(q="What does the handle do?", options=["Shakes out the last impatient sellers with a small, quiet dip",
+                                                       "Marks the bottom of the cup", "Shows the final target"],
+                 answer=0, why="A short quiet dip clears out weak holders before the move resumes."),
+            dict(q="Which shape is a cup?", options=["A sharp V", "A smooth, rounded U", "A jagged zig-zag"],
+                 answer=1, why="The rounded shape means selling faded slowly and buyers returned slowly.")]),
     "none": dict(
-        kind="none", title="8. When there is no trade", tagline="The most underrated skill: doing nothing.",
-        idea=("Most charts on most days are not a setup. Price is drifting in the middle of nowhere with no level, no clean "
-              "trend, no squeeze and no volume burst. Buying anyway is just guessing. Waiting is a position too, and with a small "
+        kind="none", title="10. When there is no trade", tagline="The most underrated skill: doing nothing.",
+        idea=("Most charts on most days are not a setup. Sometimes price chops around with no level, sometimes it is in a "
+              "steady fall (a 'falling knife'), sometimes it has already sprinted far above its 20-day line (extended), and "
+              "sometimes it sits in the middle of a range. Buying anyway is just guessing. Waiting is a position too, and with a small "
               "account it protects you from a lot of small cuts."),
         spot=["No level that has been tested repeatedly.", "No clear trend up.", "No tight squeeze and no burst of volume.",
               "You would have to guess where to put your stop."],
@@ -207,8 +249,8 @@ LESSONS = {
                 "It costs more in fees"],
                  answer=1, why="A stop should sit just beyond the level that proves you wrong. With no level there is no reason to pick any stop.")]),
 }
-ORDER = ["basics", "range", "bounce", "breakout", "pullback", "flag", "triangle", "none"]
-STOP_QUIZ_KINDS = {"range", "bounce", "breakout", "pullback", "flag", "triangle"}
+ORDER = ["basics", "range", "bounce", "breakout", "pullback", "flag", "triangle", "double", "cup", "none"]
+STOP_QUIZ_KINDS = {"range", "bounce", "breakout", "pullback", "flag", "triangle", "double", "cup"}
 STOP_WHY = {"good": "Right: just beyond the level that proves the idea wrong, so normal wiggles don't knock you out but a real failure does.",
             "tight": "Too tight: so close to the entry that ordinary day-to-day wiggle would knock you out before the idea has a chance.",
             "far": "Too far: a stop this deep means that if you're wrong you lose far more than the setup justifies."}
@@ -221,6 +263,8 @@ HINTS = {
     "pullback": "The stock is in an uptrend and has just dipped to its rising orange line. The last candle is green.",
     "flag": "A fast run-up was followed by a short, tight drift down on quiet volume, and the last candle breaks out of it.",
     "triangle": "The highs are flat while the lows keep rising, squeezing price tighter, and the last candle closes above the flat top.",
+    "double": "After a long fall, price made a low, bounced, fell back to about the same low, and the last candle just closed above the bounce's high.",
+    "cup": "Price fell in a smooth rounded dip, climbed back to where it started, paused with a small dip, and the last candle breaks above that level.",
     "none": "Nothing stands out: no level that keeps repeating, no clean trend, no squeeze. Ask yourself if you could name a clear place for a stop.",
 }
 
@@ -392,6 +436,8 @@ WHY_WIN = {
     "pullback": "The uptrend resumed. The dip held near the rising 20-day line and buyers came back.",
     "flag": "The pause was just a pause. Buyers returned and the strong run continued.",
     "triangle": "The squeeze released upward. Buyers kept lifting the lows until they overpowered the flat ceiling.",
+    "double": "The second bottom held. Sellers were exhausted at the same low, and the neckline break let buyers take control.",
+    "cup": "The rim broke for real. The rounded base and quiet handle had cleared out sellers, so buyers had little resistance.",
 }
 WHY_LOSS = {
     "range": "Support broke. Price fell below the floor, so the idea (buyers defend this level) was wrong. Leaving is exactly the plan.",
@@ -402,6 +448,8 @@ WHY_LOSS = {
                 "change instead of a rest.",
     "flag": "The flag failed. Price dropped back through the pause instead of continuing, so the buyers did not return.",
     "triangle": "A false breakout. Price fell back inside the pattern. Triangles can fail, which is why the stop sits inside them.",
+    "double": "The neckline break failed. Price fell back under it, so the buyers were not strong enough and the 'W' did not complete.",
+    "cup": "The breakout failed. Price slipped back under the rim, so the sellers there were not finished.",
 }
 
 
@@ -416,8 +464,7 @@ def _explain(chart, res):
     tb_won, tb_lost = tb["reason"].startswith("Target"), tb["reason"].startswith("Stop")
     lines = []
     if kind == "none":
-        lines.append("There was no real setup, so there was no level to anchor your stop to and no reason to expect a "
-                     "particular move. Whatever happened was mostly noise. " + (
+        lines.append(chart["g"].get("none_why", "There was no real setup.") + " Whatever happened afterwards was mostly noise. " + (
                          "A win here is luck, not skill." if won else "A loss here is the price of guessing."))
         return lines
 
@@ -582,7 +629,7 @@ def _practice_view(risk_dollars):
         h1.button("Show one hint" if not used else "Hint used", key=f"lrn_hintbtn_{seed}", on_click=_use_hint, args=(seed,),
                   disabled=used, help="One hint per chart. It tells you what is going on without giving away the stop or target.")
         if used:
-            h2.info(HINTS[kind])
+            h2.info(chart["g"].get("hint") or HINTS[kind])
         with st.expander("Stuck? A checklist"):
             st.markdown("- Is there a level price keeps turning around (support or resistance)?\n"
                         "- Is the stock in an uptrend (price above a rising orange line)?\n"
@@ -609,14 +656,13 @@ def _practice_view(risk_dollars):
     tb = lc.simulate_plan(chart["fut"], p["entry"], p["stop"], p["target"])
     if kind == "none":
         if res["action"].startswith("Buy"):
-            st.warning("This chart had no real setup: no level, no clean trend, no squeeze. Buying here is a guess, even if it worked "
-                       "out. Judge the decision, not just the result.")
+            st.warning("This chart had no real setup. Buying here is a guess, even if it worked out. Judge the decision, "
+                       "not just the result.")
             for line in _explain(chart, res):
                 st.markdown("- " + _md(line))
         else:
             st.success("Good skip. This chart had no real setup. Waiting for a clean one is the skill.")
-            st.markdown("- **Why there was nothing to trade:** no level price kept turning around, no clean trend, no squeeze and no "
-                        "volume burst. Without a level you can't say where a stop belongs, so any trade is a guess.")
+            st.markdown("- **Why there was nothing to trade:** " + chart["g"].get("none_why", "no clear setup."))
     else:
         verb = "worked" if tb["r"] > 0 else "failed"
         st.info(_md(f"This was a **{lc.NAMES[kind]}** setup. A textbook plan (stop {p['stop']:,.2f}, target {p['target']:,.2f}) "

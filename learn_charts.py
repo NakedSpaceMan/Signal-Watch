@@ -25,14 +25,14 @@ import pandas as pd
 HIST_MIN = 70
 FUT_BARS = 20
 MAX_HOLD = 15
-KINDS = ["range", "bounce", "breakout", "pullback", "flag", "triangle", "none"]
-SUCCESS_P = {"range": 0.55, "bounce": 0.45, "breakout": 0.5, "pullback": 0.55, "flag": 0.55,
-             "triangle": 0.5}
-PRACTICE_WEIGHTS = {"range": 0.12, "bounce": 0.15, "breakout": 0.17, "pullback": 0.17, "flag": 0.12,
-                    "triangle": 0.12, "none": 0.15}
+KINDS = ["range", "bounce", "breakout", "pullback", "flag", "triangle", "double", "cup", "none"]
+SUCCESS_P = {"range": 0.55, "bounce": 0.45, "breakout": 0.5, "pullback": 0.55, "flag": 0.55, "triangle": 0.5,
+             "double": 0.5, "cup": 0.5}
+PRACTICE_WEIGHTS = {"range": 0.10, "bounce": 0.12, "breakout": 0.14, "pullback": 0.14, "flag": 0.10, "triangle": 0.09,
+                    "double": 0.09, "cup": 0.08, "none": 0.14}
 NAMES = {"range": "Support and resistance (range)", "bounce": "Bounce off support", "breakout": "Breakout",
          "pullback": "Pullback in an uptrend", "flag": "Bull flag", "triangle": "Ascending triangle",
-         "none": "No setup"}
+         "double": "Double bottom", "cup": "Cup and handle", "none": "No setup"}
 
 GREEN, RED = "#26a69a", "#ef5350"
 SUPPORT_C, RESIST_C, STOP_C, TARGET_C, ENTRY_C, TREND_C = (
@@ -106,168 +106,250 @@ def _line(x0, y0, x1, y1, label, color=TREND_C, dash="solid"):
 
 
 # ------------------------------------------------------------------ pattern generators
-# Each returns the visible half (arrays o,h,l,c,v) plus the markup and the plan levels.
-def _gen_range(rng, s):
+# Each generator draws its OWN random structure (how long the run-up was, how many times a level was touched, how deep
+# the dips are, which candle shape ends the pattern, how big the breakout is), so two charts of the same pattern
+# do not look alike. Each returns the visible half (arrays o,h,l,c,v) plus the markup and the plan levels.
+class _Retry(Exception):
+    """This random draw didn't produce a clean example; draw again."""
+
+
+def _ri(rng, lo, hi):
+    return int(rng.integers(lo, hi + 1))
+
+
+def _rr(rng, lo, hi):
+    return float(rng.uniform(lo, hi))
+
+
+def _bar(rng, o, h, l, c, vmult):
+    return {"o": np.array([o], float), "h": np.array([h], float), "l": np.array([l], float),
+            "c": np.array([c], float), "v": _vol(rng, 1, vmult)}
+
+
+def _context(rng, start, end, bars, s, waves=None, vmult=1.0):
+    """A believable move from start to end: a few waves with counter-moves, not one straight line."""
+    bars = int(bars)
+    waves = waves or _ri(rng, 2, 4)
+    if bars < 14 or waves < 2:
+        return _seg(rng, start, [(bars, end)], s, vmult)
+    cuts = np.sort(rng.choice(np.arange(5, bars - 4), size=waves - 1, replace=False))
+    edges = np.r_[0, cuts, bars]
+    span, floor_px = end - start, min(start, end) * 0.75
+    legs = []
+    for i in range(1, len(edges)):
+        price = start + span * edges[i] / bars
+        if i < len(edges) - 1:
+            price += span * rng.uniform(-0.2, 0.2)
+        legs.append((int(edges[i] - edges[i - 1]), max(price, floor_px)))
+    legs[-1] = (legs[-1][0], end)
+    return _seg(rng, start, legs, s, vmult)
+
+
+def _gen_range(rng, s, mid_end=False):
     S = rng.uniform(25, 120)
-    R = S * (1 + rng.uniform(0.11, 0.16))
-    leg = int(rng.integers(8, 12))
-    legs = [(6, R), (leg, S), (leg, R), (leg, S), (leg, R), (leg, S), (2, S * 1.02)]
-    ends = np.cumsum([b for b, _ in legs]) - 1
+    R = S * (1 + _rr(rng, 0.09, 0.18))
     mid = (S + R) / 2
-    lead = _path(mid, [(20, mid * (1 + rng.uniform(-0.01, 0.01)))], rng, s)   # a quiet stretch before the range
-    legs[0] = (6, R)
-    close = np.concatenate([lead, np.clip(_path(lead[-1], legs, rng, s), S * 1.003, R * 0.997)])
-    ends = ends + 20
+    n_s = _ri(rng, 2, 4)
+    lead_n = _ri(rng, 10, 32)
+    legs, kinds = [(_ri(rng, 4, 9), R)], ["R"]
+    for j in range(n_s):
+        legs.append((_ri(rng, 6, 13), S)); kinds.append("S")
+        if j < n_s - 1:
+            legs.append((_ri(rng, 6, 13), R)); kinds.append("R")
+    if mid_end:
+        legs.append((_ri(rng, 5, 8), mid * _rr(rng, 0.99, 1.01)))
+    else:
+        legs.append((2, S * _rr(rng, 1.012, 1.03)))
+    kinds.append("end")
+    lead = _path(mid, [(lead_n, mid * (1 + _rr(rng, -0.02, 0.02)))], rng, s)
+    body = np.clip(_path(lead[-1], legs, rng, s), S * 1.003, R * 0.997)
+    close = np.concatenate([lead, body])
+    ends = np.cumsum([b for b, _ in legs]) - 1 + lead_n
     o, h, l = _candles(close, rng, s, mid)
-    h = np.minimum(h, R * 1.003)
-    l = np.maximum(l, S * 0.997)
-    for i in (ends[0], ends[2], ends[4]):
-        h[i] = R * (1 + rng.uniform(-0.002, 0.002))
-    for i in (ends[1], ends[3], ends[5]):
-        l[i] = S * (1 + rng.uniform(-0.002, 0.002))
-    if close[-1] <= o[-1]:
+    h, l = np.minimum(h, R * 1.003), np.maximum(l, S * 0.997)
+    pts, nR, nS = [], 0, 0
+    for i, k in zip(ends, kinds):
+        if k == "R":
+            h[i] = R * (1 + _rr(rng, -0.002, 0.002)); nR += 1
+            pts.append(dict(x=int(i), y=R, text=str(len(pts) + 1), color="#ffffff"))
+        elif k == "S":
+            l[i] = S * (1 + _rr(rng, -0.002, 0.002)); nS += 1
+            pts.append(dict(x=int(i), y=S, text=str(len(pts) + 1), color="#ffffff"))
+    if not mid_end and close[-1] <= o[-1]:
         o[-1] = close[-1] * 0.993
     o, h, l, c = _fix(o, h, l, close)
-    v = _vol(rng, len(c), 1.0)
+    arr = {"o": o, "h": h, "l": l, "c": c, "v": _vol(rng, len(c), 1.0)}
     atr = _atr(h, l, c)
-    pts = [(int(ends[i]), R, f"{n}") for n, i in ((1, 0), (3, 2), (5, 4))]
-    pts += [(int(ends[i]), S, f"{n}") for n, i in ((2, 1), (4, 3), (6, 5))]
-    return {
-        "arr": {"o": o, "h": h, "l": l, "c": c, "v": v},
+    g = {
+        "arr": arr, "variant": "range",
         "levels": [dict(y=R, label=f"Resistance {_money(R)}", color=RESIST_C, dash="dash"),
                    dict(y=S, label=f"Support {_money(S)}", color=SUPPORT_C, dash="dash")],
         "zones": [(R * 0.996, R * 1.004, RESIST_C), (S * 0.996, S * 1.004, SUPPORT_C)],
-        "points": [dict(x=i, y=y, text=t, color="#ffffff") for i, y, t in sorted(pts)],
-        "lines": [],
+        "points": pts, "lines": [],
         "stop": S - 0.6 * atr, "target": R * 0.985,
+        "hint": "Price has been bouncing between a floor and a ceiling. Notice where the last candle sits compared with them.",
         "notes": [
-            f"Support {_money(S)} (green): price fell to this level and turned back up 3 times (points 2, 4, 6). "
-            "Buyers keep stepping in here.",
-            f"Resistance {_money(R)} (red): price rose to this level and turned back down 3 times (points 1, 3, 5). "
-            "Sellers keep stepping in here.",
+            f"Support {_money(S)} (green): price fell to this level and turned back up {nS} times. Buyers keep stepping in here.",
+            f"Resistance {_money(R)} (red): price rose to this level and turned back down {nR} times. Sellers keep stepping in here.",
             "The more times a level holds, the more traders watch it, and the more it tends to hold again, until it doesn't.",
-            f"The last candle just bounced off support. The plan buys the next open, with the stop a little BELOW "
-            f"support ({_money(S - 0.6 * atr)}): if price breaks support, the idea was wrong and you want out.",
+            f"The last candle just bounced off support. The plan buys the next open, with the stop a little BELOW support "
+            f"({_money(S - 0.6 * atr)}): if price breaks support, the idea was wrong and you want out.",
             f"The target sits just under resistance ({_money(R * 0.985)}), where sellers have appeared before.",
         ]}
+    if mid_end:
+        g.update(stop=float(c[-1]) - 2 * atr, target=None)
+    return g
 
 
 def _gen_bounce(rng, s):
     S = rng.uniform(25, 120)
-    H = S * rng.uniform(1.16, 1.24)
-    legs_a = [(5, S * 0.998), (4, S * 1.04), (3, S * 1.0)]                      # the base that makes support
-    legs_b = [(18, H), (8, H * 0.985), (24, S * 1.006)]                           # rally, top, then the sell-off
-    pre = _seg(rng, S * 1.03, [(14, S * 1.03)], s, 1.0)
+    H = S * _rr(rng, 1.12, 1.28)
+    pre_n = _ri(rng, 6, 28)
+    pre = _seg(rng, S * _rr(rng, 1.0, 1.05), [(pre_n, S * _rr(rng, 1.015, 1.05))], s, 1.0)
+    n_base = _ri(rng, 2, 3)
+    legs_a = []
+    for j in range(n_base):
+        legs_a.append((_ri(rng, 3, 6), S * _rr(rng, 0.996, 1.002)))
+        if j < n_base - 1:
+            legs_a.append((_ri(rng, 3, 6), S * _rr(rng, 1.025, 1.05)))
     a = _seg(rng, pre["c"][-1], legs_a, s, 1.0)
-    b = _seg(rng, a["c"][-1], legs_b, s, [1.0] * 18 + [0.9] * 8 + list(np.linspace(1.1, 1.7, 24)))
-    last2 = _seg(rng, b["c"][-1], [(1, S * 1.0)], s, 1.8)
-    ham = _seg(rng, last2["c"][-1], [(1, S * 1.016)], s, 2.3)
-    arr = _cat(pre, a, b, last2, ham)
-    n = len(arr["c"])
-    # shape the last two candles: a probe of support, then a hammer (long lower wick, closes near the high)
-    arr["l"][-2] = min(arr["l"][-2], S * 0.994)
-    arr["o"][-1], arr["c"][-1] = S * 1.003, S * 1.016
-    arr["l"][-1] = S * 0.985
-    arr["h"][-1] = S * 1.019
+    base_idx = [pre_n + int(e) for e in (np.cumsum([b for b, _ in legs_a]) - 1)[::2]]
+    rally_n, top_n, sell_n = _ri(rng, 14, 24), _ri(rng, 4, 10), _ri(rng, 16, 32)
+    legs_b = [(rally_n, H), (top_n, H * _rr(rng, 0.975, 0.99)), (sell_n, S * _rr(rng, 1.004, 1.012))]
+    b = _seg(rng, a["c"][-1], legs_b, s, [1.0] * rally_n + [0.9] * top_n + list(np.linspace(1.1, 1.7, sell_n)))
+    variant = "hammer" if rng.random() < 0.55 else "engulf"
+    if variant == "hammer":
+        two = {"o": [S * 1.004, S * 1.003], "h": [S * 1.009, S * 1.019], "l": [S * 0.994, S * 0.985],
+               "c": [S * 1.002, S * 1.016]}
+    else:
+        two = {"o": [S * 1.012, S * 0.998], "h": [S * 1.014, S * 1.023], "l": [S * 0.996, S * 0.993],
+               "c": [S * 1.001, S * 1.021]}
+    last2 = {k: np.array(v, float) for k, v in two.items()}
+    last2["v"] = _vol(rng, 2, [1.8, 2.3])
+    arr = _cat(pre, a, b, last2)
     o, h, l, c = _fix(arr["o"], arr["h"], arr["l"], arr["c"])
     arr.update(o=o, h=h, l=l, c=c)
+    n = len(c)
     atr = _atr(h, l, c)
-    base_i = [len(pre["c"]) + 4, len(pre["c"]) + 11]
-    stop = float(l[-1]) - 0.5 * atr
+    stop = float(l[-2:].min()) - 0.5 * atr
+    peak_i = pre_n + len(a["c"]) + rally_n + top_n - 1
+    pts = [dict(x=i, y=S, text=str(k + 1), color="#ffffff") for k, i in enumerate(base_idx)]
+    pts.append(dict(x=n - 1, y=float(l[-1]), text=str(len(pts) + 1), color="#ffffff"))
+    cand = ("a 'hammer' candle: it dipped below support (long lower wick), then buyers pushed it back up to close near the high. "
+            "That says sellers tried and failed." if variant == "hammer" else
+            "a 'bullish engulfing' pair: a red candle followed by a green candle whose body swallows the red one. That says "
+            "buyers overwhelmed the sellers in a single day.")
     return {
-        "arr": arr,
+        "arr": arr, "variant": variant,
         "levels": [dict(y=S, label=f"Support {_money(S)}", color=SUPPORT_C, dash="dash")],
-        "zones": [(S * 0.993, S * 1.007, SUPPORT_C)],
-        "points": [dict(x=base_i[0], y=S, text="1", color="#ffffff"), dict(x=base_i[1], y=S, text="2", color="#ffffff"),
-                   dict(x=n - 1, y=float(l[-1]), text="3", color="#ffffff")],
-        "lines": [_line(len(pre["c"]) + 12, H, n - 3, S * 1.006, "Sell-off", RESIST_C, "dot")],
+        "zones": [(S * 0.993, S * 1.007, SUPPORT_C)], "points": pts,
+        "lines": [_line(peak_i, float(b["c"][rally_n + top_n - 1]), n - 3, float(b["c"][-1]), "Sell-off", RESIST_C, "dot")],
         "stop": stop, "target": None,
+        "hint": ("A sharp sell-off has run into a price where the stock stopped before, and the last candle has a long lower wick."
+                 if variant == "hammer" else
+                 "A sharp sell-off has run into a price where the stock stopped before, and a green candle just swallowed the red one before it."),
         "notes": [
-            f"Support {_money(S)}: early on, price based here and turned up (points 1 and 2). That makes it a level traders remember.",
-            "Then the stock rallied, topped out, and sold off hard back to the same level. Fast sell-offs push a stock into oversold "
-            "territory, where sellers run out of steam.",
-            f"Point 3 is a 'hammer' candle: it dipped below support (long lower wick), then buyers pushed it back up to close near "
-            f"the high. That says sellers tried and failed.",
-            f"The plan buys the next open. The stop goes under the hammer's low ({_money(stop)}): if price makes a new low below the "
-            "hammer, the bounce failed and you leave.",
+            f"Support {_money(S)}: earlier, price based here and turned up ({n_base} touches before the rally). That makes it a level traders remember.",
+            "Then the stock rallied, topped out, and sold off hard back to the same level. Fast sell-offs push a stock into "
+            "oversold territory, where sellers run out of steam.",
+            f"Point {len(pts)} is {cand}",
+            f"The plan buys the next open. The stop goes under the low of the last two candles ({_money(stop)}): if price makes "
+            "a new low below that, the bounce failed and you leave.",
         ]}
 
 
 def _gen_breakout(rng, s):
     R = rng.uniform(25, 120)
-    ctx = _seg(rng, R * 0.72, [(40, R * 0.95)], s, 1.0)
-    legs = [(4, R * 0.935), (5, R), (6, R * 0.94), (5, R), (5, R * 0.945), (5, R), (4, R * 0.96)]
-    base = _seg(rng, ctx["c"][-1], legs, s * 0.9, 0.7)
+    ctx_n = _ri(rng, 25, 60)
+    ctx = _context(rng, R * _rr(rng, 0.6, 0.85), R * _rr(rng, 0.93, 0.97), ctx_n, s)
+    n_t = _ri(rng, 2, 4)
+    legs, touch = [], []
+    dip = _rr(rng, 0.05, 0.09)
+    for _ in range(n_t):
+        legs.append((_ri(rng, 3, 7), R * (1 - dip))); touch.append(False)
+        legs.append((_ri(rng, 3, 6), R)); touch.append(True)
+        dip = max(dip * _rr(rng, 0.6, 0.9), 0.02)
+    legs.append((_ri(rng, 3, 5), R * _rr(rng, 0.955, 0.975))); touch.append(False)
+    base = _seg(rng, ctx["c"][-1], legs, s * 0.9, _rr(rng, 0.6, 0.85))
     ends = np.cumsum([b for b, _ in legs]) - 1
-    off = len(ctx["c"])
-    n0 = off + len(base["c"])
-    for i in (ends[1], ends[3], ends[5]):
-        base["c"][i] = min(base["c"][i], R * 0.998)
-        base["h"][i] = R * (1 + rng.uniform(-0.002, 0.002))
     base["c"] = np.minimum(base["c"], R * 0.998)
+    for i, t in zip(ends, touch):
+        if t:
+            base["h"][i] = R * (1 + _rr(rng, -0.002, 0.002))
     base["h"] = np.minimum(base["h"], R * 1.003)
-    bo = _seg(rng, base["c"][-1], [(1, R * 1.03)], s, 3.0)
-    bo["o"][0], bo["c"][0] = R * 1.0, R * 1.03
-    bo["l"][0], bo["h"][0] = R * 0.998, R * 1.034
+    gap = rng.random() < 0.3
+    o_ = R * (1 + _rr(rng, 0.006, 0.014)) if gap else R * _rr(rng, 0.997, 1.003)
+    c_ = R * (1 + _rr(rng, 0.022, 0.042))
+    bo = _bar(rng, o_, c_ * (1 + _rr(rng, 0.002, 0.008)), R * (1.001 if gap else _rr(rng, 0.996, 1.0)), c_, _rr(rng, 2.2, 3.8))
     arr = _cat(ctx, base, bo)
     o, h, l, c = _fix(arr["o"], arr["h"], arr["l"], arr["c"])
     arr.update(o=o, h=h, l=l, c=c)
     atr = _atr(h, l, c)
     stop = R - 0.5 * atr
     n = len(c)
+    pts = [dict(x=ctx_n + int(i), y=R, text="", color="#ffffff") for i, t in zip(ends, touch) if t]
+    for k, p in enumerate(pts):
+        p["text"] = str(k + 1)
+    pts.append(dict(x=n - 1, y=float(h[-1]), text=str(len(pts) + 1), color="#ffffff"))
     return {
-        "arr": arr,
+        "arr": arr, "variant": "gap" if gap else "close",
         "levels": [dict(y=R, label=f"Resistance {_money(R)}", color=RESIST_C, dash="dash")],
-        "zones": [(R * 0.996, R * 1.004, RESIST_C)],
-        "points": [dict(x=off + int(ends[i]), y=R, text=t, color="#ffffff") for i, t in ((1, "1"), (3, "2"), (5, "3"))]
-        + [dict(x=n - 1, y=float(h[-1]), text="4", color="#ffffff")],
-        "lines": [],
+        "zones": [(R * 0.996, R * 1.004, RESIST_C)], "points": pts, "lines": [],
         "stop": stop, "target": None,
+        "hint": "Price kept getting turned back at the same ceiling, and the last candle just closed above it on heavy volume.",
         "notes": [
-            f"Resistance {_money(R)}: price pushed up to this level and got turned back 3 times (points 1 to 3), "
-            "while the dips got shallower. Sellers are running out.",
+            f"Resistance {_money(R)}: price pushed up to this level and got turned back {n_t} times (points 1 to {n_t}), while "
+            "the dips got shallower. Sellers are running out.",
             "During the base, volume was quiet (bars at the bottom). Calm before the move.",
-            f"Point 4 is the breakout: a strong candle CLOSING above resistance, with volume about 3 times normal. "
-            "Heavy volume says real buyers showed up, not just a blip.",
+            f"Point {n_t + 1} is the breakout: a strong candle CLOSING above resistance"
+            + (", after opening with a gap above it," if gap else ",") + " with volume well above normal. Heavy volume says real "
+            "buyers showed up, not just a blip.",
             f"The plan buys the next open. The stop goes just under the old resistance ({_money(stop)}): once price is above a "
             "level, that level should act as support. If it falls back below, the breakout failed.",
         ]}
 
 
 def _gen_pullback(rng, s):
-    for _ in range(80):
+    for _ in range(150):
         P = rng.uniform(25, 120)
-        legs = [(18, P * 1.10), (4, P * 1.075), (16, P * 1.20), (5, P * 1.17), (16, P * 1.30), (5, P * 1.275),
-                (12, P * 1.40)]
-        d = rng.uniform(0.045, 0.085)
-        peak = P * 1.40
-        up = _seg(rng, P, legs, s, 1.0)
-        dip = _seg(rng, up["c"][-1], [(int(rng.integers(5, 8)), peak * (1 - d))], s, 0.75)
+        pre = _seg(rng, P * _rr(rng, 0.88, 0.97), [(_ri(rng, 12, 40), P)], s, 1.0)
+        k, lv, legs = _ri(rng, 3, 5), 1.0, []
+        for i in range(k):
+            lv *= 1 + _rr(rng, 0.05, 0.12)
+            legs.append((_ri(rng, 8, 15), P * lv))
+            if i < k - 1:
+                legs.append((_ri(rng, 3, 6), P * lv * (1 - _rr(rng, 0.02, 0.045))))
+        peak, d, dn = P * lv, _rr(rng, 0.04, 0.09), _ri(rng, 4, 8)
+        up = _seg(rng, pre["c"][-1], legs, s, 1.0)
+        dip = _seg(rng, up["c"][-1], [(dn, peak * (1 - d))], s, 0.75)
         back = _seg(rng, dip["c"][-1], [(1, dip["c"][-1] * 1.014)], s, 1.5)
-        arr = _cat(up, dip, back)
+        arr = _cat(pre, up, dip, back)
         o, h, l, c = _fix(arr["o"], arr["h"], arr["l"], arr["c"])
         if c[-1] <= o[-1]:
             o[-1] = c[-1] * 0.994
             o, h, l, c = _fix(o, h, l, c)
         ema = pd.Series(c).ewm(span=20, adjust=False).mean().to_numpy()
-        dip_low = float(l[-6:-1].min())
-        if (dip_low <= ema[-1] * 1.015 and dip_low >= ema[-1] * 0.96 and c[-1] >= ema[-1] * 0.99
+        dip_low = float(l[-(dn + 1):-1].min())
+        if (len(c) >= 58 and dip_low <= ema[-1] * 1.015 and dip_low >= ema[-1] * 0.96 and c[-1] >= ema[-1] * 0.99
                 and ema[-1] > ema[-6] and c[-1] > h[-2] * 0.995):
             break
+    else:
+        raise _Retry()
     arr.update(o=o, h=h, l=l, c=c)
     atr = _atr(h, l, c)
     stop = dip_low - 0.5 * atr
     n = len(c)
-    lo_i = n - 6 + int(np.argmin(l[-6:-1]))
+    lo_i = n - (dn + 1) + int(np.argmin(l[-(dn + 1):-1]))
     return {
-        "arr": arr, "levels": [], "zones": [],
+        "arr": arr, "variant": "pullback", "levels": [], "zones": [], "lines": [],
         "points": [dict(x=int(np.argmax(h[: n - 4])), y=float(h[: n - 4].max()), text="1", color="#ffffff"),
                    dict(x=lo_i, y=dip_low, text="2", color="#ffffff"),
                    dict(x=n - 1, y=float(c[-1]), text="3", color="#ffffff")],
-        "lines": [], "stop": stop, "target": None,
+        "stop": stop, "target": None,
+        "hint": "The stock is in an uptrend and has just dipped to its rising orange line. The last candle is green.",
         "notes": [
             "The stock is in an uptrend: higher highs and higher lows, with the orange 20-day line (EMA 20) rising underneath.",
-            "Point 1 is the latest high. Then price pulled back (dipped) for several days on lighter volume. Quiet dips in an "
+            f"Point 1 is the latest high. Then price pulled back (dipped) for about {dn} days on lighter volume. Quiet dips in an "
             "uptrend are usually profit-taking, not panic.",
             f"Point 2: the dip stopped right at the 20-day line, a spot where buyers often step in. The low was {_money(dip_low)}.",
             "Point 3: a green candle that closes above the previous day's high. That is the sign buyers are back, and your trigger to buy.",
@@ -277,45 +359,44 @@ def _gen_pullback(rng, s):
 
 def _gen_flag(rng, s):
     F = rng.uniform(25, 120)
-    pre = _seg(rng, F * 0.92, [(46, F * 1.02)], s, 1.0)
-    pole = _seg(rng, pre["c"][-1], [(7, F * 1.02 * 1.26)], s * 0.55, 2.0)
+    pre = _context(rng, F * _rr(rng, 0.85, 0.95), F * _rr(rng, 1.0, 1.03), _ri(rng, 20, 55), s)
+    pole_n, pole_g = _ri(rng, 5, 9), _rr(rng, 0.16, 0.32)
+    p0 = float(pre["c"][-1])
+    pole = _seg(rng, p0, [(pole_n, p0 * (1 + pole_g))], s * 0.55, 2.0)
     T = float(pole["c"][-1])
-    nf = int(rng.integers(10, 13))
+    nf, drift, hw = _ri(rng, 7, 14), _rr(rng, 0.035, 0.09), _rr(rng, 0.012, 0.022)
     t = np.arange(1, nf + 1)
-    centre = T * (1 - 0.012) - T * 0.065 * t / nf
-    upper_f, lower_f = centre + 0.016 * T, centre - 0.016 * T
-    close = np.clip(centre + _ar_noise(rng, nf, 0.006 * T), centre - 0.011 * T, centre + 0.011 * T)
+    centre = T * (1 - 0.012) - T * drift * t / nf
+    upper_f, lower_f = centre + hw * T, centre - hw * T
+    close = np.clip(centre + _ar_noise(rng, nf, 0.006 * T), centre - 0.7 * hw * T, centre + 0.7 * hw * T)
     o, h, l = _candles(close, rng, s * 0.8, T)
-    h = np.minimum(h, upper_f + 0.002 * T)
-    l = np.maximum(l, lower_f - 0.002 * T)
+    h, l = np.minimum(h, upper_f + 0.002 * T), np.maximum(l, lower_f - 0.002 * T)
     o, h, l, c = _fix(o, h, l, close)
     flag = {"o": o, "h": h, "l": l, "c": c, "v": _vol(rng, nf, np.linspace(0.8, 0.45, nf))}
-    ub = float(upper_f[-1] - (upper_f[0] - upper_f[-1]) / (nf - 1))
-    bo = _seg(rng, c[-1], [(1, ub * 1.025)], s, 2.6)
-    bo["o"][0], bo["c"][0] = ub * 0.998, ub * 1.025
-    bo["h"][0], bo["l"][0] = bo["c"][0] * 1.006, ub * 0.995
+    slope = (upper_f[0] - upper_f[-1]) / (nf - 1)
+    ub = float(upper_f[-1] - slope)
+    bc = ub * (1 + _rr(rng, 0.012, 0.035))
+    bo = _bar(rng, ub * _rr(rng, 0.996, 1.0), bc * 1.006, ub * 0.995, bc, _rr(rng, 2.2, 3.2))
     arr = _cat(pre, pole, flag, bo)
     o, h, l, c = _fix(arr["o"], arr["h"], arr["l"], arr["c"])
     arr.update(o=o, h=h, l=l, c=c)
     atr = _atr(h, l, c)
     f0 = len(pre["c"]) + len(pole["c"])
     n = len(c)
-    flag_low = float(l[f0:n - 1].min())
-    stop = flag_low - 0.5 * atr
-    pole_pct = (T / float(pre["c"][-1]) - 1) * 100
+    stop = float(l[f0:n - 1].min()) - 0.5 * atr
     return {
-        "arr": arr, "levels": [], "zones": [],
-        "points": [dict(x=f0 - 4, y=float(h[f0 - 4]), text="1", color="#ffffff"),
+        "arr": arr, "variant": "flag", "levels": [], "zones": [],
+        "points": [dict(x=f0 - max(pole_n // 2, 1), y=float(h[f0 - max(pole_n // 2, 1)]), text="1", color="#ffffff"),
                    dict(x=f0 + nf // 2, y=float(upper_f[nf // 2]), text="2", color="#ffffff"),
                    dict(x=n - 1, y=float(h[-1]), text="3", color="#ffffff")],
-        "lines": [_line(f0 - 0.5, upper_f[0] + (upper_f[0] - upper_f[-1]) / nf, n - 1,
-                        upper_f[-1] - (upper_f[0] - upper_f[-1]) / (nf - 1), "Flag top", TREND_C),
-                  _line(f0 - 0.5, lower_f[0] + (lower_f[0] - lower_f[-1]) / nf, n - 2, lower_f[-1], "Flag bottom", TREND_C)],
+        "lines": [_line(f0 - 0.5, upper_f[0] + slope, n - 1, ub, "Flag top", TREND_C),
+                  _line(f0 - 0.5, lower_f[0] + slope, n - 2, lower_f[-1], "Flag bottom", TREND_C)],
         "stop": stop, "target": None,
+        "hint": "A fast run-up was followed by a short, tight drift down on quiet volume, and the last candle breaks out of it.",
         "notes": [
-            f"Point 1: the 'pole'. A fast, strong run up of about {pole_pct:.0f}% in a week, on heavy volume. That shows big buying interest.",
-            "Point 2: the 'flag'. Price drifts down in a tight, sloping channel (the yellow lines) on shrinking volume. This is a "
-            "pause where early buyers take a little profit, not a reversal.",
+            f"Point 1: the 'pole'. A fast, strong run up of about {pole_g * 100:.0f}% in {pole_n} days, on heavy volume. That shows big buying interest.",
+            f"Point 2: the 'flag'. Price drifts down in a tight, sloping channel (the yellow lines) for about {nf} days on shrinking "
+            "volume. This is a pause where early buyers take a little profit, not a reversal.",
             "Point 3: price breaks above the top of the flag on rising volume. That says the pause is over and buyers are back in charge.",
             f"The stop goes under the flag's low ({_money(stop)}). If price falls back through the whole flag, the pattern failed.",
             "Textbook note: some traders aim for the pole's height added to the breakout. This lesson uses a simpler 2-to-1 target.",
@@ -324,87 +405,248 @@ def _gen_flag(rng, s):
 
 def _gen_triangle(rng, s):
     R = rng.uniform(25, 120)
-    ctx = _seg(rng, R * 0.70, [(42, R * 0.93)], s, 1.0)
-    nt = 40
-    L = lambda t: R * (0.915 + 0.053 * t / (nt - 1))  # rising floor of the triangle
-    lens = [5, 6, 6, 6, 5, 5, 5, 2]
-    ends_t = np.cumsum(lens) - 1
-    legs = [(5, R), (6, L(ends_t[1])), (6, R), (6, L(ends_t[3])), (5, R), (5, L(ends_t[5])), (5, R), (2, R * 0.992)]
+    ctx_n = _ri(rng, 28, 55)
+    ctx = _context(rng, R * _rr(rng, 0.62, 0.8), R * _rr(rng, 0.9, 0.94), ctx_n, s)
+    n_low = _ri(rng, 2, 4)
+    f0, f1 = _rr(rng, 0.89, 0.93), _rr(rng, 0.955, 0.975)
+    legs, kinds, low_px = [(_ri(rng, 4, 7), R)], ["R"], []
+    for j in range(n_low):
+        px = R * (f0 + (f1 - f0) * j / (n_low - 1))
+        low_px.append(px)
+        legs.append((_ri(rng, 4, 7), px)); kinds.append("L")
+        legs.append((_ri(rng, 4, 7), R)); kinds.append("R")
+    legs.append((_ri(rng, 2, 3), R * 0.992)); kinds.append("hold")
+    nt = sum(b for b, _ in legs)
     tri = _seg(rng, ctx["c"][-1], legs, s * 0.85, np.linspace(1.0, 0.55, nt))
-    off = len(ctx["c"])
-    tt = np.arange(nt)
-    tri["c"] = np.clip(tri["c"], L(tt) * 1.003, R * 0.997)
+    ends = np.cumsum([b for b, _ in legs]) - 1
+    low_idx = [int(e) for e, k in zip(ends, kinds) if k == "L"]
+    tri["c"] = np.minimum(tri["c"], R * 0.997)
     tri["h"] = np.minimum(tri["h"], R * 1.003)
-    tri["l"] = np.maximum(tri["l"], L(tt) * 0.997)
-    for i in (ends_t[0], ends_t[2], ends_t[4], ends_t[6]):
-        tri["h"][i] = R * (1 + rng.uniform(-0.002, 0.002))
-    for i in (ends_t[1], ends_t[3], ends_t[5]):
-        tri["l"][i] = L(i) * (1 + rng.uniform(-0.002, 0.002))
-    bo = _seg(rng, tri["c"][-1], [(1, R * 1.03)], s, 2.8)
-    bo["o"][0], bo["c"][0] = R * 0.998, R * 1.03
-    bo["l"][0], bo["h"][0] = R * 0.995, R * 1.034
+    t = np.arange(nt)
+    floor = np.interp(t, low_idx, low_px)
+    inside = (t >= low_idx[0]) & (t <= low_idx[-1])
+    tri["c"] = np.where(inside, np.maximum(tri["c"], floor * 1.003), tri["c"])
+    tri["l"] = np.where(inside, np.maximum(tri["l"], floor * 0.997), tri["l"])
+    for i, k in zip(ends, kinds):
+        if k == "R":
+            tri["h"][i] = R * (1 + _rr(rng, -0.002, 0.002))
+        elif k == "L":
+            tri["l"][i] = low_px[low_idx.index(int(i))] * (1 + _rr(rng, -0.002, 0.002))
+    c_ = R * (1 + _rr(rng, 0.022, 0.04))
+    bo = _bar(rng, R * _rr(rng, 0.996, 1.0), c_ * 1.005, R * 0.995, c_, _rr(rng, 2.4, 3.4))
     arr = _cat(ctx, tri, bo)
     o, h, l, c = _fix(arr["o"], arr["h"], arr["l"], arr["c"])
     arr.update(o=o, h=h, l=l, c=c)
     n = len(c)
     stop = R * 0.975
-    lows = [(off + int(ends_t[i]), float(L(ends_t[i]))) for i in (1, 3, 5)]
+    pts = [dict(x=ctx_n + int(i), y=R, text="", color="#ffffff") for i, k in zip(ends, kinds) if k == "R"]
+    for q, p in enumerate(pts):
+        p["text"] = str(q + 1)
+    pts.append(dict(x=n - 1, y=float(h[-1]), text=str(len(pts) + 1), color="#ffffff"))
+    slope = (low_px[-1] - low_px[0]) / (low_idx[-1] - low_idx[0])
+    x0 = ctx_n + low_idx[0]
     return {
-        "arr": arr,
+        "arr": arr, "variant": "triangle",
         "levels": [dict(y=R, label=f"Flat top {_money(R)}", color=RESIST_C, dash="dash")],
-        "zones": [(R * 0.996, R * 1.004, RESIST_C)],
-        "points": [dict(x=off + int(ends_t[i]), y=R, text=t, color="#ffffff") for i, t in ((0, "1"), (2, "2"), (4, "3"), (6, "4"))]
-        + [dict(x=n - 1, y=float(h[-1]), text="5", color="#ffffff")],
-        "lines": [_line(lows[0][0], lows[0][1], n - 1, float(L(nt - 1 + 2)), "Rising floor", TREND_C)],
+        "zones": [(R * 0.996, R * 1.004, RESIST_C)], "points": pts,
+        "lines": [_line(x0, low_px[0], n - 1, low_px[0] + slope * (n - 1 - x0), "Rising floor", TREND_C)],
         "stop": stop, "target": None,
+        "hint": "The highs are flat while the lows keep rising, squeezing price tighter, and the last candle closes above the flat top.",
         "notes": [
-            f"The top is flat: price hits {_money(R)} again and again (points 1 to 4) and gets turned back. Sellers are defending it.",
+            f"The top is flat: price hits {_money(R)} again and again (points 1 to {len(pts) - 1}) and gets turned back. Sellers are defending it.",
             "But the lows keep getting HIGHER (yellow line). Each dip, buyers step in earlier. Buyers are pushing, sellers are holding the line.",
             "The squeeze: the space between the two lines narrows and volume dries up. Pressure builds like a spring.",
-            f"Point 5: price closes above the flat top on heavy volume, the release of the spring. Ascending triangles break up "
-            "more often than down, but not always.",
+            f"Point {len(pts)}: price closes above the flat top on heavy volume, the release of the spring. Ascending triangles "
+            "break up more often than down, but not always.",
             f"The stop goes back inside the pattern, below the old top ({_money(stop)}). If price falls back in, it was a false breakout.",
         ]}
 
 
-def _gen_none(rng, s):
-    P = rng.uniform(25, 120)
-    legs, cur = [], P
-    left = 84
-    while left > 0:
-        b = int(min(left, rng.integers(5, 12)))
-        cur = P * (1 + rng.uniform(-0.06, 0.06))
-        legs.append((b, cur))
-        left -= b
-    seg = _seg(rng, P, legs, s * 1.15, 1.0)
-    o, h, l, c = _fix(seg["o"], seg["h"], seg["l"], seg["c"])
-    seg.update(o=o, h=h, l=l, c=c)
+def _gen_double(rng, s):
+    N = rng.uniform(25, 120)
+    H = N * _rr(rng, 1.07, 1.15)
+    B1 = N * _rr(rng, 0.86, 0.92)
+    B2 = B1 * (1 + _rr(rng, -0.015, 0.015))
+    lead = _seg(rng, H * _rr(rng, 0.97, 1.0), [(_ri(rng, 12, 34), H * (1 + _rr(rng, -0.02, 0.02)))], s, 1.0)
+    d1_n, r1_n, d2_n, r2_n = _ri(rng, 14, 24), _ri(rng, 8, 13), _ri(rng, 8, 13), _ri(rng, 9, 14)
+    d1 = _seg(rng, lead["c"][-1], [(d1_n, B1)], s, np.linspace(1.0, 1.7, d1_n))
+    r1 = _seg(rng, d1["c"][-1], [(r1_n, N * 0.997)], s, 0.9)
+    d2 = _seg(rng, r1["c"][-1], [(d2_n, B2)], s, np.linspace(0.9, 0.6, d2_n))
+    r2 = _seg(rng, d2["c"][-1], [(r2_n, N * 0.99)], s, np.linspace(0.9, 1.3, r2_n))
+    d1["l"][-1] = B1 * (1 + _rr(rng, -0.003, 0.003))
+    d2["l"][-1] = B2 * (1 + _rr(rng, -0.003, 0.003))
+    for sg in (r1, d2, r2):
+        sg["c"] = np.minimum(sg["c"], N * 0.999)
+        sg["h"] = np.minimum(sg["h"], N * 1.003)
+    r1["h"][-1] = N * (1 + _rr(rng, -0.002, 0.002))
+    bc = N * (1 + _rr(rng, 0.022, 0.04))
+    bo = _bar(rng, N * _rr(rng, 0.996, 1.0), bc * 1.005, N * 0.995, bc, _rr(rng, 2.4, 3.6))
+    arr = _cat(lead, d1, r1, d2, r2, bo)
+    o, h, l, c = _fix(arr["o"], arr["h"], arr["l"], arr["c"])
+    arr.update(o=o, h=h, l=l, c=c)
     atr = _atr(h, l, c)
+    stop = N - 0.5 * atr
+    n = len(c)
+    i1 = len(lead["c"]) + d1_n - 1
+    i2 = i1 + r1_n
+    i3 = i2 + d2_n
+    mid_b = (B1 + B2) / 2
     return {
-        "arr": seg, "levels": [], "zones": [], "points": [], "lines": [],
-        "stop": float(c[-1]) - 2 * atr, "target": None,
+        "arr": arr, "variant": "double",
+        "levels": [dict(y=N, label=f"Neckline {_money(N)}", color=RESIST_C, dash="dash"),
+                   dict(y=mid_b, label=f"Bottoms about {_money(mid_b)}", color=SUPPORT_C, dash="dash")],
+        "zones": [(N * 0.996, N * 1.004, RESIST_C), (mid_b * 0.992, mid_b * 1.008, SUPPORT_C)],
+        "points": [dict(x=i1, y=float(l[i1]), text="1", color="#ffffff"), dict(x=i2, y=float(h[i2]), text="2", color="#ffffff"),
+                   dict(x=i3, y=float(l[i3]), text="3", color="#ffffff"), dict(x=n - 1, y=float(h[-1]), text="4", color="#ffffff")],
+        "lines": [], "stop": stop, "target": None,
+        "hint": "After a long fall, price made a low, bounced, fell back to about the same low, and the last candle just closed above the bounce's high.",
         "notes": [
-            "No level has been tested over and over. No clean trend. No tight squeeze. No burst of volume.",
-            "Price is drifting in the middle of nowhere, which is the worst place to buy: no nearby level to put a stop behind, "
-            "so your stop is a guess.",
-            "Not every chart is a trade. Waiting is a position too, and it protects your small account from small cuts.",
+            f"Point 1: after a long fall, price makes a low near {_money(B1)} and bounces. Selling slowed down.",
+            f"Point 2: the bounce stalls at the 'neckline' ({_money(N)}), the high of the bounce. Sellers show up there.",
+            f"Point 3: price falls back to about the SAME low (within a couple of percent) but on lighter volume. The sellers who "
+            "dumped the first time are already gone, so the second test fails to push lower. That is the second bottom: the 'W'.",
+            "Point 4: price closes above the neckline on a burst of volume. That says the buyers have won the tug of war.",
+            f"The stop goes just under the neckline ({_money(stop)}): once price is above it, it should hold. Some traders put "
+            "the stop under the second bottom instead, which is safer against a retest but means a bigger loss if you're wrong.",
         ]}
 
 
+def _gen_cup(rng, s):
+    R = rng.uniform(25, 120)
+    ctx_n = _ri(rng, 20, 40)
+    ctx = _context(rng, R * _rr(rng, 0.7, 0.85), R * _rr(rng, 0.99, 1.0), ctx_n, s)
+    n_c, d = _ri(rng, 24, 40), _rr(rng, 0.12, 0.22)
+    x = np.linspace(0, 1, n_c + 1)[1:]
+    close = np.minimum(R * (1 - d * np.sin(np.pi * x) ** 0.85) * (1 + _ar_noise(rng, n_c, s * 0.7)), R * 0.999)
+    o, h, l = _candles(close, rng, s * 0.9, float(ctx["c"][-1]))
+    h = np.minimum(h, R * 1.002)
+    o, h, l, c = _fix(o, h, l, close)
+    cup = {"o": o, "h": h, "l": l, "c": c, "v": _vol(rng, n_c, 1.0 - 0.35 * np.sin(np.pi * x))}
+    hn, hd = _ri(rng, 5, 9), _rr(rng, 0.025, 0.045)
+    handle = _seg(rng, float(c[-1]), [(hn - 1, R * (1 - hd)), (1, R * (1 - hd * 0.5))], s * 0.7, np.linspace(0.7, 0.5, hn))
+    handle["c"] = np.minimum(handle["c"], R * 0.997)
+    handle["h"] = np.minimum(handle["h"], R * 1.0)
+    bc = R * (1 + _rr(rng, 0.018, 0.038))
+    bo = _bar(rng, R * _rr(rng, 0.996, 1.0), bc * 1.005, R * 0.995, bc, _rr(rng, 2.4, 3.6))
+    arr = _cat(ctx, cup, handle, bo)
+    o, h, l, c = _fix(arr["o"], arr["h"], arr["l"], arr["c"])
+    arr.update(o=o, h=h, l=l, c=c)
+    atr = _atr(h, l, c)
+    hs = ctx_n + n_c
+    handle_low = float(l[hs:hs + hn].min())
+    stop = handle_low - 0.4 * atr
+    n = len(c)
+    bot_i = ctx_n + int(np.argmin(c[ctx_n:ctx_n + n_c]))
+    return {
+        "arr": arr, "variant": "cup",
+        "levels": [dict(y=R, label=f"Rim {_money(R)}", color=RESIST_C, dash="dash")],
+        "zones": [(R * 0.996, R * 1.004, RESIST_C)],
+        "points": [dict(x=ctx_n - 1, y=float(h[ctx_n - 1]), text="1", color="#ffffff"),
+                   dict(x=bot_i, y=float(l[bot_i]), text="2", color="#ffffff"),
+                   dict(x=hs + int(np.argmin(l[hs:hs + hn])), y=handle_low, text="3", color="#ffffff"),
+                   dict(x=n - 1, y=float(h[-1]), text="4", color="#ffffff")],
+        "lines": [], "stop": stop, "target": None,
+        "hint": "Price fell in a smooth rounded dip, climbed back to where it started, paused with a small dip, and the last candle breaks above that level.",
+        "notes": [
+            f"Point 1: the left rim. Price runs up to {_money(R)}, where sellers appear and push it back down.",
+            f"Point 2: the bottom of the 'cup'. The decline is rounded, not a crash: selling slowly fades and buyers slowly return. "
+            f"The cup is about {d * 100:.0f}% deep.",
+            "Then price climbs back up to the old rim. Rounded bottoms mean the stock got a genuine second look from buyers.",
+            f"Point 3: the 'handle'. A short, shallow dip (about {hd * 100:.0f}%) on light volume shakes out the last impatient sellers.",
+            f"Point 4: price closes above the rim on a burst of volume. The stop goes under the handle's low ({_money(stop)}): "
+            "if that breaks, the pattern failed.",
+        ]}
+
+
+def _gen_none(rng, s):
+    v = rng.choice(["chop", "knife", "extended", "mid"], p=[0.3, 0.25, 0.25, 0.2])
+    P = rng.uniform(25, 120)
+    if v == "mid":
+        g = _gen_range(rng, s, mid_end=True)
+        g["variant"] = "mid"
+        g["hint"] = "There is a clear floor and ceiling. Where is price relative to them?"
+        g["none_why"] = ("Price is in the middle of the range, far from both support and resistance. There is no nearby level "
+                         "to anchor a stop to, so any stop is a guess, and the room to the ceiling is modest.")
+        g["notes"] = ["There IS a range here (the green floor and red ceiling), but price is sitting in the middle of it.",
+                      "Buying in the middle means your stop has to be far below support, or inside the range where it gets hit by noise.",
+                      "Wait for price to come back to a level, or to break out of the range with volume."]
+        return g
+    if v == "chop":
+        legs, left = [], _ri(rng, 70, 100)
+        amp = _rr(rng, 0.03, 0.08)
+        while left > 0:
+            b = int(min(left, rng.integers(5, 12)))
+            legs.append((b, P * (1 + rng.uniform(-amp, amp))))
+            left -= b
+        seg = _seg(rng, P, legs, s * 1.15, 1.0)
+        why = ("There was no level tested over and over, no clean trend, no squeeze and no volume burst. Price was drifting "
+               "in the middle of nowhere, so there was no spot where a stop clearly belongs.")
+        hint = ("Nothing stands out: no level that keeps repeating, no clean trend, no squeeze. Ask yourself if you could name "
+                "a clear place for a stop.")
+        notes = ["No level has been tested over and over. No clean trend. No tight squeeze. No burst of volume.",
+                 "Price is drifting in the middle of nowhere, which is the worst place to buy: no nearby level to put a stop "
+                 "behind, so your stop is a guess.",
+                 "Not every chart is a trade. Waiting is a position too, and it protects your small account from small cuts."]
+        lines, drift = [], 0.0
+    elif v == "knife":
+        ctx = _context(rng, P * _rr(rng, 1.3, 1.6), P, _ri(rng, 55, 85), s, waves=3)
+        up = _seg(rng, float(ctx["c"][-1]), [(_ri(rng, 2, 4), float(ctx["c"][-1]) * _rr(rng, 1.02, 1.045))], s, 1.2)
+        seg = _cat(ctx, up)
+        c0 = seg["c"]
+        ema = pd.Series(c0).ewm(span=20, adjust=False).mean().to_numpy()
+        if not (ema[-1] < ema[-10] and c0[-1] <= ema[-1] * 1.03):
+            raise _Retry()
+        why = ("The stock was in a downtrend: lower highs and lower lows with the 20-day line sloping down above price. A small "
+               "bounce inside a downtrend is 'catching a falling knife'. No level had held, and the trend was against you.")
+        hint = "The stock has been falling for weeks. Look at the direction of the orange line and whether the highs are getting lower."
+        notes = ["Look at the trend: each rally tops out lower than the last (lower highs) and each dip goes lower (lower lows). "
+                 "The orange 20-day line is sloping down and sits above price.",
+                 "The last few green candles look tempting, but they are a small bounce inside a bigger fall.",
+                 "No support level has held, so there is nowhere sensible to put a stop. Trading against the trend is the hard way.",
+                 "Wait for the trend to change: price stops making lower lows, builds a base, and turns up."]
+        lines, drift = [], -0.012
+    else:
+        ctx = _context(rng, P * 0.65, P * _rr(rng, 0.95, 1.0), _ri(rng, 35, 60), s)
+        run = _seg(rng, float(ctx["c"][-1]), [(_ri(rng, 7, 11), float(ctx["c"][-1]) * _rr(rng, 1.14, 1.22))], s * 0.7, 1.8)
+        seg = _cat(ctx, run)
+        ema = pd.Series(seg["c"]).ewm(span=20, adjust=False).mean().to_numpy()
+        if seg["c"][-1] / ema[-1] - 1 < 0.09:
+            raise _Retry()
+        why = ("Price had sprinted far above its 20-day line with no pause or base. Buying now is chasing: your stop would "
+               "have to be far away, and there is no recent level to anchor it to.")
+        hint = "The stock has run up fast with almost no pause. How far is price from the orange line?"
+        notes = ["The stock has run up fast, and price is far above the orange 20-day line with no pause or base.",
+                 "Buying now is chasing. The nearest sensible level for a stop is far below, so you'd risk a lot to make a little.",
+                 "Wait for a pause (a flag or base) or a pullback toward the 20-day line, then look for a setup."]
+        lines, drift = [], 0.0
+    o, h, l, c = _fix(seg["o"], seg["h"], seg["l"], seg["c"])
+    seg.update(o=o, h=h, l=l, c=c)
+    atr = _atr(h, l, c)
+    out = {"arr": seg, "variant": v, "levels": [], "zones": [], "points": [], "lines": lines,
+           "stop": float(c[-1]) - 2 * atr, "target": None, "hint": hint, "none_why": why, "notes": notes, "drift": drift}
+    if v == "knife":
+        k = min(45, len(h))
+        xs = np.arange(len(h) - k, len(h))
+        m, b = np.polyfit(xs, h[-k:], 1)
+        out["lines"] = [_line(xs[0], m * xs[0] + b, xs[-1], m * xs[-1] + b, "Lower highs", RESIST_C, "dot")]
+    return out
+
+
 GEN = {"range": _gen_range, "bounce": _gen_bounce, "breakout": _gen_breakout, "pullback": _gen_pullback,
-       "flag": _gen_flag, "triangle": _gen_triangle, "none": _gen_none}
+       "flag": _gen_flag, "triangle": _gen_triangle, "double": _gen_double, "cup": _gen_cup, "none": _gen_none}
 
 # how a winning / losing second half behaves, as a fraction of the risk distance
 FUT = {"range": dict(dip=0.25, up=0.0, k2=(8, 13)), "bounce": dict(dip=0.25, up=0.0, k2=(6, 11)),
        "breakout": dict(dip=0.40, up=0.35, k2=(6, 11)), "pullback": dict(dip=0.30, up=0.0, k2=(6, 11)),
-       "flag": dict(dip=0.30, up=0.30, k2=(6, 11)), "triangle": dict(dip=0.30, up=0.30, k2=(6, 11))}
+       "flag": dict(dip=0.30, up=0.30, k2=(6, 11)), "triangle": dict(dip=0.30, up=0.30, k2=(6, 11)),
+       "double": dict(dip=0.35, up=0.30, k2=(6, 11)), "cup": dict(dip=0.30, up=0.30, k2=(6, 11))}
 
 
-def _future(rng, entry, stop, target, success, s, kind, vol_base):
+def _future(rng, entry, stop, target, success, s, kind, vol_base, drift=0.0):
     risk = entry - stop
     pr = FUT.get(kind)
     if kind == "none" or pr is None:
-        legs = [(5, entry * (1 + rng.normal(0, 0.03))) for _ in range(FUT_BARS // 5)]
+        legs = [(5, entry * (1 + drift * 5 * (i + 1) + rng.normal(0, 0.03))) for i in range(FUT_BARS // 5)]
     elif success:
         k1, k2 = int(rng.integers(2, 5)), int(rng.integers(*pr["k2"]))
         legs = [(k1, entry - pr["dip"] * risk), (k2, target + 0.35 * risk),
@@ -445,8 +687,11 @@ def make_chart(kind, seed):
     for attempt in range(150):
         rng = np.random.default_rng(int(seed) * 997 + attempt)
         want = (rng.random() < SUCCESS_P[kind]) if kind in SUCCESS_P else None
-        s = float(rng.uniform(0.009, 0.013))
-        g = GEN[kind](rng, s)
+        s = float(rng.uniform(0.0075, 0.015))
+        try:
+            g = GEN[kind](rng, s)
+        except _Retry:
+            continue
         a = g["arr"]
         hist = pd.DataFrame({"Open": a["o"], "High": a["h"], "Low": a["l"], "Close": a["c"], "Volume": a["v"]})
         entry = float(hist.Close.iloc[-1] * (1 + rng.normal(0, 0.002)))
@@ -457,7 +702,7 @@ def make_chart(kind, seed):
         target = float(g["target"]) if g.get("target") else entry + 2 * risk
         if target < entry + 1.4 * risk:
             continue
-        f = _future(rng, entry, stop, target, bool(want), s, kind, float(hist.Volume.median()))
+        f = _future(rng, entry, stop, target, bool(want), s, kind, float(hist.Volume.median()), g.get("drift", 0.0))
         fut = pd.DataFrame({"Open": f["o"], "High": f["h"], "Low": f["l"], "Close": f["c"], "Volume": f["v"]})
         out = simulate_plan(fut, entry, stop, target)
         best = (hist, fut, g, entry, stop, target, out)
@@ -467,6 +712,8 @@ def make_chart(kind, seed):
             break
         if attempt >= 60:           # good enough: a valid chart whose outcome we simply report truthfully
             break
+    if best is None:                 # extremely unlikely; fall back to a fixed, known-good draw
+        return make_chart(kind, int(seed) + 1)
     hist, fut, g, entry, stop, target, out = best
     return {"kind": kind, "seed": int(seed), "hist": hist, "fut": fut, "g": g,
             "plan": {"entry": entry, "stop": stop, "target": target, "rr": (target - entry) / (entry - stop)},
