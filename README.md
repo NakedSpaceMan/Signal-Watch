@@ -12,7 +12,15 @@ read from the last three months of daily data, including an earnings check and a
 
 When you open the app, the start screen asks whether you want **Stocks** or **Crypto**. Each is its own environment with its own trades and settings.
 
-### Stocks
+## Both modes
+
+- **Learn tab:** lessons on reading a chart and trading support and resistance, bounces, breakouts, pullbacks, flags,
+  triangles, double bottoms, cup and handles and when to stay out, using made-up practice charts with every level marked,
+  plus quizzes and a **Practice trades** mode that scores you in R. No real money, nothing saved to your ledger.
+- **Beginner mode:** plain-English ("explain like I'm five") text everywhere.
+- **Guide tab:** what every box in the sidebar does.
+
+## Stocks
 
 - **Chart tab:** swing (daily) chart and live intraday chart, hover-to-learn markers, Buy / Hold / Sell verdict with reasons,
   earnings check (next date, past beats/misses, past price reactions), and a **News check** (tagged headlines,
@@ -21,14 +29,6 @@ When you open the app, the start screen asks whether you want **Stocks** or **Cr
 - **Portfolio:** positions, stop-raising suggestions, trade history, price alerts. **Practice mode** keeps a separate fake-money ledger.
 - **Today / Weekly review:** a daily checklist and a weekly look back with praise and one thing to improve.
 - **Backtest & history:** test the swing rules on past data, with plain-English hover help on every column.
-
-### Both modes
-
-- **Learn tab:** lessons on reading a chart and trading support and resistance, bounces, breakouts, pullbacks, flags,
-  triangles, double bottoms, cup and handles and when to stay out, using made-up practice charts with every level marked,
-  plus quizzes and a **Practice trades** mode that scores you in R. No real money, nothing saved to your ledger.
-- **Beginner mode:** plain-English ("explain like I'm five") text everywhere.
-- **Guide tab:** what every box in the sidebar does.
 
 ## Crypto mode
 
