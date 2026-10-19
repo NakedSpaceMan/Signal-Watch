@@ -468,7 +468,7 @@ def backtest_tab(stop_mult, rr, fee):
                "both), minus a round-trip cost. It only includes coins that exist today, which flatters the results more in crypto than "
                "in stocks, because many coins have died. Treat it as a sanity check.")
     b1, b2, b3, b4 = st.columns(4)
-    setups = b1.multiselect("Setups", ["Pullback", "Breakout", "Bounce"], default=["Pullback", "Breakout", "Bounce"], key="cxb_set")
+    setups = b1.multiselect("Setups", ["Pullback", "Breakout", "Bounce"], default=["Pullback", "Breakout", "Bounce"], key="cxb_setups")
     hold = b2.number_input("Max days to hold", min_value=2, max_value=60, value=15, key="cxb_hold")
     cost = b3.number_input("Round-trip cost (%)", min_value=0.0, max_value=5.0, value=float(fee), step=0.1, key="cxb_cost",
                            help="Starts from your sidebar round-trip fee. Robinhood's lowest tier is 0.95% per market or stop order and 0.50% per limit order.")
