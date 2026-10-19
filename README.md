@@ -17,7 +17,7 @@ read from the last three months of daily data, including an earnings check and a
 - **Portfolio:** positions, stop-raising suggestions, trade history, price alerts. **Practice mode** keeps a separate fake-money ledger.
 - **Today / Weekly review:** a daily checklist and a weekly look back with praise and one thing to improve.
 - **Backtest & history:** test the swing rules on past data, with plain-English hover help on every column.
-- **Crypto mode:** the start screen asks Stocks or Crypto. Crypto is its own environment (scanner, chart, portfolio, backtest, Learn, guide) for coins on Robinhood's list. It trades 24/7, uses wider stops and smaller positions, reads Bitcoin's trend as the market weather, and keeps its own trades (`signal_crypto.db`) and settings (`crypto_settings.json`) apart from your stocks. **Weekend Warrior** (sidebar checkbox) plans a Friday-night buy and a sell by Sunday night so cash is free for Monday's stock open: tighter stop, nearer target, two-day hold, Friday-only backtest.
+- **Crypto mode:** the start screen asks Stocks or Crypto. Crypto is its own environment (scanner, chart, portfolio, backtest, Learn, guide) for coins on Robinhood's list. It trades 24/7, uses wider stops and smaller positions, reads Bitcoin's trend as the market weather, and keeps its own trades (`signal_crypto.db`) and settings (`crypto_settings.json`) apart from your stocks. **It is untested against the live market**, so treat its picks as experimental. Stocks and crypto share one account: the account value is a single number, and what you hold on one side is subtracted from the other side's free cash (`shared.py`). The crypto sidebar shows your buying power, with a hover note on where the rest of the money is. **Weekend Warrior** (sidebar checkbox) plans a Friday-night buy and a sell by Sunday night so cash is free for Monday's stock open: tighter stop, nearer target, two-day hold, Friday-only backtest. With it on, the Chart tab opens on the Monday-to-Sunday week.
 - **Learn tab:** lessons on reading a chart and trading support and resistance, bounces, breakouts, pullbacks, flags,
   triangles, double bottoms, cup and handles and when to stay out, using made-up practice charts with every level marked, plus quizzes and a **Practice trades** mode that scores
   you in R. No real money, nothing saved to your ledger.
@@ -62,7 +62,7 @@ pip install -r requirements.txt
 streamlit run signal_app.py
 ```
 
-Stop the app with **Ctrl+C** in the terminal. After you update the code, stop and restart the app (a browser refresh is not enough).
+Stop the app with **Ctrl+C** in the terminal. After you update the code, Streamlit usually shows a "Source file changed" banner: click **Rerun** (or **Always rerun**) to load it. Restart the app after adding a new file or changing `.streamlit/config.toml` (which hides the Deploy button).
 
 ## Updating
 ```bash
