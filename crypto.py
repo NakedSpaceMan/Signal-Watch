@@ -103,6 +103,32 @@ def resolve_missing(coins, missing):
 DEFAULT_COST_PCT = 1.5
 
 
+# "Weekend Warrior": buy Friday night, sell by Sunday night. The Friday daily candle closes Friday 5 PM Pacific (summer; 4 PM in
+# winter) and Sunday's closes Sunday 5 PM, so a weekend trade is about two daily candles: it enters near Saturday's open and
+# is closed no later than Sunday's close. Stops are tighter and targets nearer because there are only about two days to work with.
+WW = dict(stop_atr_mult=1.5, reward_risk=1.5, max_hold=2, horizon=3)
+WW_STRETCH_ROOM = 2.0
+WW_DAY = 4                      # Friday
+
+
+def ww_window(now=None):
+    """Where we are relative to the Weekend Warrior window (Friday 5 PM to Sunday 11 PM Pacific)."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("America/Los_Angeles")
+    now = now.astimezone(tz) if now is not None and now.tzinfo else (now.replace(tzinfo=tz) if now else datetime.now(tz))
+    back = (now.weekday() - 4) % 7
+    start = (now - timedelta(days=back)).replace(hour=17, minute=0, second=0, microsecond=0)
+    if start > now:
+        start -= timedelta(days=7)
+    end = (start + timedelta(days=2)).replace(hour=23, minute=0)
+    if now <= end:
+        return {"open": True, "start": start, "end": end, "left": end - now, "now": now}
+    nxt = start + timedelta(days=7)
+    return {"open": False, "start": nxt, "end": nxt + timedelta(days=2, hours=6), "until": nxt - now, "now": now}
+
+
 def criteria(**kw):
     """Swing rules tuned for coins: no price floor, no earnings, wide daily-swing limit, volume floor in dollars."""
     base = dict(min_price=0.0, min_market_cap=0, min_avg_volume=2_000_000, max_atr_pct=15.0, skip_earnings_days=0,
@@ -110,6 +136,11 @@ def criteria(**kw):
                 cost_pct=DEFAULT_COST_PCT)
     base.update(kw)
     return sc.SwingCriteria(**base)
+
+
+def weekend_criteria(**kw):
+    """Criteria for the Weekend Warrior plan (tighter stop, nearer target, two-day hold, 3-day room check)."""
+    return criteria(**{**WW, **kw})
 
 
 def _finished(d):
@@ -238,7 +269,7 @@ def scan(c, frames, names, account=None, risk_dollars=0.0, max_pos_pct=100.0):
         if stop <= 0 or risk <= 0:
             continue
         past = sc.setup_history(df, flags, found, c)
-        feat = ql.feature_series(df, flags, bench_close, c.stop_atr_mult, c.reward_risk).iloc[-1]
+        feat = ql.feature_series(df, flags, bench_close, c.stop_atr_mult, c.reward_risk, c.horizon).iloc[-1]
         qscore, qparts, qraw = ql.score_row(feat, past["avg_r"], past["trades"])
         target = float(r.Close + c.reward_risk * risk)
         row = {"Coin": sym.replace("-USD", ""), "Name": names.get(sym, ""), "Symbol": sym,
@@ -264,6 +295,7 @@ def scan(c, frames, names, account=None, risk_dollars=0.0, max_pos_pct=100.0):
         rows.append(row)
     stats["matches"] = len(rows)
     stats["last_bar"] = pd.Timestamp(last_bar).strftime("%b %d") if last_bar is not None else ""
+    stats["last_date"] = pd.Timestamp(last_bar) if last_bar is not None else None
     df = pd.DataFrame(rows)
     if not df.empty:
         df = df.sort_values(["Score", "Vol x"], ascending=False, na_position="last").reset_index(drop=True)

@@ -76,7 +76,7 @@ def explain(p, raw, bench="SPY"):
     return ", ".join(out) if out else "middle of the pack on every measure"
 
 
-def feature_series(df, flags, spy_close, stop_mult, reward_risk):
+def feature_series(df, flags, spy_close, stop_mult, reward_risk, horizon=HORIZON):
     """Per-day inputs for every bar of one stock (uses only data up to each bar)."""
     close = df["Close"].astype(float)
     r = np.log(close).diff()
@@ -85,7 +85,7 @@ def feature_series(df, flags, spy_close, stop_mult, reward_risk):
     sig = np.sqrt(0.6 * var + 0.4 * slow)
     atr = flags["atr"].astype(float)
     target_pct = reward_risk * stop_mult * atr / close
-    room = target_pct / (sig * np.sqrt(HORIZON))
+    room = target_pct / (sig * np.sqrt(horizon))
     trend = df["EMA20"] / df["EMA200"] - 1
     if spy_close is not None and len(spy_close):
         sp = spy_close.copy()
@@ -107,7 +107,7 @@ def score_row(feat_row, past_avg_r=None, past_n=0):
 
 
 # ----------------------------------------------------------------------------- testing the score on history
-def score_trades(frames, criteria, params, spy_close=None, progress=None):
+def score_trades(frames, criteria, params, spy_close=None, progress=None, weekday=None):
     """Backtest trades (as bt.run_backtest) with the score each one had on its signal day, using only earlier information."""
     import scanner as sc
 
@@ -119,10 +119,11 @@ def score_trades(frames, criteria, params, spy_close=None, progress=None):
             continue
         df = so.add_indicators(d)
         flags = sc.swing_setup_flags(df, criteria)
-        trades = [t for t in bt.backtest_symbol(df, flags, params) if t["reason"] != "Still open"]
+        trades = [t for t in bt.backtest_symbol(df, flags, params, weekday=weekday) if t["reason"] != "Still open"]
         if not trades:
             continue
-        feat = feature_series(df, flags, spy_close, params.stop_atr_mult, params.reward_risk)
+        feat = feature_series(df, flags, spy_close, params.stop_atr_mult, params.reward_risk,
+                              getattr(criteria, "horizon", HORIZON))
         done = []
         for t in trades:                                    # trades come in time order, one at a time per stock
             i = t["signal_idx"]

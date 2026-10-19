@@ -148,7 +148,16 @@ def run():
     cost = sb.number_input("Round-trip fee (%)", min_value=0.0, max_value=5.0, step=0.1, value=float(saved.get("cost", cr.DEFAULT_COST_PCT)),
                            help="What buying and then selling costs you in total. At Robinhood's lowest volume tier: 0.95% per market or stop order, "
                                 "0.50% per limit order. A limit buy plus a stop sell is about 1.45%; market both ways about 1.9%. See the Guide tab.")
-    new = dict(acct=acct, risk_pct=risk_pct, max_pos=max_pos, max_new=int(max_new), stop_mult=stop_mult, rr=rr, cost=cost)
+    sb.header("Weekend Warrior")
+    ww = sb.checkbox("Weekend Warrior mode", value=bool(saved.get("ww", False)), key="cx_ww",
+                     help="This mode makes a plan that prioritizes you taking a trade on Friday night and selling by Sunday night, "
+                          "so your cash is available for regular stock trading when the market opens again Monday (6:30 AM Pacific). "
+                          "It uses a tighter stop and a nearer target, since there are only about two days to work with.")
+    if ww:
+        stop_mult, rr = cr.WW["stop_atr_mult"], cr.WW["reward_risk"]
+        sb.caption(f"Using a {stop_mult:g}-ATR stop and a {rr:g}-to-1 target for the weekend. The trade rules above are ignored while this is on.")
+    new = dict(acct=acct, risk_pct=risk_pct, max_pos=max_pos, max_new=int(max_new), stop_mult=saved.get("stop_mult", 2.0) if ww else stop_mult,
+               rr=saved.get("rr", 2.0) if ww else rr, cost=cost, ww=ww)
     if new != {k: saved.get(k) for k in new}:
         _save({**saved, **new})
     risk_dollars = round(acct * risk_pct / 100, 2)
@@ -175,13 +184,13 @@ def run():
     t_scan, t_chart, t_port, t_bt, t_learn, t_guide = st.tabs(
         ["Scanner", "Chart", "Portfolio", "Backtest", "Learn", "Guide"])
     with t_scan:
-        scanner_tab(acct, risk_dollars, max_pos, int(max_new), stop_mult, rr, w, invested, cost)
+        scanner_tab(acct, risk_dollars, max_pos, int(max_new), stop_mult, rr, w, invested, cost, ww)
     with t_chart:
         chart_tab(stop_mult, rr, valued)
     with t_port:
         portfolio_tab(store, tx, pos, valued, psum, acct, px)
     with t_bt:
-        backtest_tab(stop_mult, rr, cost)
+        backtest_tab(stop_mult, rr, cost, ww)
     with t_learn:
         st.info("The lessons use made-up charts, and the same patterns show up on coin charts. The big differences: coins move "
                 "more, so stops sit further away, and the market never closes.")
@@ -210,29 +219,44 @@ def _load_chart(coin):
     st.session_state["cx_coin_in"] = coin
 
 
-def scanner_tab(acct, risk_dollars, max_pos, max_new, stop_mult, rr, weather, invested, cost):
+def scanner_tab(acct, risk_dollars, max_pos, max_new, stop_mult, rr, weather, invested, cost, ww=False):
     st.subheader("Swing scanner for coins")
     st.caption("Looks for the same three setups as the stock scanner (pullback, breakout, bounce) on daily candles, inside "
                "uptrends, then ranks them with the Score. Sized so a stop-out costs about "
                f"{money(risk_dollars)}.")
+    win = None
+    if ww:
+        win = cr.ww_window()
+        if win["open"]:
+            left = win["left"]
+            st.success(f"**Weekend Warrior is on, and the window is open.** Sell everything by Sunday {win['end']:%I:%M %p} Pacific "
+                       f"({left.days * 24 + left.seconds // 3600} hours left) so the cash is free when stocks open Monday 6:30 AM.")
+        else:
+            until = win["until"]
+            st.info(f"**Weekend Warrior is on.** The next window opens Friday {win['start']:%I:%M %p} Pacific, in "
+                    f"{until.days}d {until.seconds // 3600}h. Run the scan then, after Friday's candle closes. "
+                    "You can scan now to preview what it would pick.")
     coins = _coin_set_ui("cxs")
     f1, f2 = st.columns(2)
     hide_stretch = f1.checkbox("Hide setups whose target is a stretch", value=True, key="cx_stretch",
-                               help=f"Hides results where the target is more than {STRETCH_ROOM:g} times the coin's usual 15-day move.")
+                               help=f"Hides results where the target is more than {(cr.WW_STRETCH_ROOM if ww else STRETCH_ROOM):g} times the coin's usual "
+                                    f"{'3' if ww else '15'}-day move.")
     gate = f2.checkbox("Be pickier when Bitcoin is weak", value=True, key="cx_gate",
                        help="Partly cloudy: only scores of 50 or more. Stormy: 65 or more.")
     if st.button("Run crypto scan", key="cx_run"):
         with st.spinner("Downloading daily candles and checking setups... this can take a minute."):
             frames, names, no_data = cached_frames(tuple(coins), "2y")
-            c = cr.criteria(stop_atr_mult=stop_mult, reward_risk=rr, cost_pct=cost)
+            c = cr.weekend_criteria(cost_pct=cost) if ww else cr.criteria(stop_atr_mult=stop_mult, reward_risk=rr, cost_pct=cost)
             df, stats = cr.scan(c, frames, names, acct, risk_dollars, max_pos)
             stats["no_data"] = no_data
-            st.session_state["cx_scan"] = (df, stats, datetime.now())
+            st.session_state["cx_scan"] = (df, stats, datetime.now(), bool(ww))
     res = st.session_state.get("cx_scan")
     if not res:
         st.info("Press Run crypto scan. Nothing is bought or sold; it only suggests.")
         return
-    df, stats, when = res
+    df, stats, when, scan_ww = res
+    if scan_ww != bool(ww):
+        st.warning("These results were made with the Weekend Warrior setting " + ("on" if scan_ww else "off") + ". Run the scan again to match the current setting.")
     st.caption(f"Scanned {when:%b %d %I:%M %p}  ·  {stats['loaded']} coins loaded, {stats['trend']} in an uptrend, "
                f"{stats['matches']} with a setup (latest finished candle: {stats['last_bar']}).")
     if stats.get("no_data"):
@@ -244,7 +268,7 @@ def scanner_tab(acct, risk_dollars, max_pos, max_new, stop_mult, rr, weather, in
         return
     notes = []
     if hide_stretch and "Room x" in df.columns:
-        keep = ~(df["Room x"] > STRETCH_ROOM)
+        keep = ~(df["Room x"] > (cr.WW_STRETCH_ROOM if scan_ww else STRETCH_ROOM))
         if (~keep).any():
             notes.append(f"{int((~keep).sum())} hidden because the target is a stretch")
         df = df[keep]
@@ -265,7 +289,11 @@ def scanner_tab(acct, risk_dollars, max_pos, max_new, stop_mult, rr, weather, in
             if c in df.columns]
     table(df[show], TIPS, price_cols=("Price", "Stop", "Target", "Units"))
 
-    st.markdown("#### Combined plan: what you could take together")
+    st.markdown("#### Weekend Warrior plan" if ww else "#### Combined plan: what you could take together")
+    if ww:
+        lb = stats.get("last_date")
+        if lb is not None and pd.Timestamp(lb).weekday() != cr.WW_DAY:
+            st.caption(f"Heads up: the latest finished candle is {pd.Timestamp(lb):%A}, not Friday, so these are previews, not Friday-night picks.")
     cash = max(acct - invested, 0.0)
     plan, left = [], cash
     for _, r in df.iterrows():
@@ -285,10 +313,13 @@ def scanner_tab(acct, risk_dollars, max_pos, max_new, stop_mult, rr, weather, in
         st.info("Nothing fits your cash and limits right now. Common reasons: cash is already invested, or stops are wide for the risk you allow.")
     else:
         p = pd.DataFrame(plan)
+        if ww:
+            p["Sell by"] = f"Sun {cr.ww_window()['end']:%I:%M %p} PT" if win and win["open"] else "Sun 11:00 PM PT"
         table(p, TIPS, price_cols=("Units", "Stop", "Target"))
         st.caption(esc(f"Cash available: {money(cash)}. Total cost {money(p['Buy $'].sum())}. If every stop is hit you would lose "
                        f"about {money(p['Risk $'].sum())} ({p['Risk $'].sum() / acct * 100:.1f}% of the account) if they fill at the stop; "
-                       "a fast drop can fill lower. Crypto has no market close, so a stop can trigger overnight."))
+                       "a fast drop can fill lower. Crypto has no market close, so a stop can trigger overnight."
+                       + (" Weekend Warrior: if the target hasn't hit by Sunday night, sell at market anyway so your cash is back for Monday." if ww else "")))
     pick = st.selectbox("Open a coin in the Chart tab", df["Coin"].tolist(), key="cx_pick")
     st.button("Load chart", key="cx_loadchart", on_click=_load_chart, args=(pick,))
     if st.session_state.get("cx_coin_in") == pick:
@@ -462,14 +493,17 @@ def portfolio_tab(store, tx, pos, valued, psum, acct, px):
 
 
 # ------------------------------------------------------------------ backtest
-def backtest_tab(stop_mult, rr, fee):
+def backtest_tab(stop_mult, rr, fee, ww=False):
     st.subheader("Test the swing rules on past coin data")
     st.caption("Enters at the NEXT day's open after a setup and simulates your stop and target day by day (stop first if one day touches "
                "both), minus a round-trip cost. It only includes coins that exist today, which flatters the results more in crypto than "
                "in stocks, because many coins have died. Treat it as a sanity check.")
+    if ww:
+        st.info("Weekend Warrior is on: only setups seen on a Friday candle are tested, bought at Saturday's open (Friday 5 PM Pacific in summer) "
+                "and closed within 2 daily candles (by Sunday's close).")
     b1, b2, b3, b4 = st.columns(4)
     setups = b1.multiselect("Setups", ["Pullback", "Breakout", "Bounce"], default=["Pullback", "Breakout", "Bounce"], key="cxb_setups")
-    hold = b2.number_input("Max days to hold", min_value=2, max_value=60, value=15, key="cxb_hold")
+    hold = b2.number_input("Max days to hold", min_value=2, max_value=60, value=2 if ww else 15, key="cxb_hold_ww" if ww else "cxb_hold")
     cost = b3.number_input("Round-trip cost (%)", min_value=0.0, max_value=5.0, value=float(fee), step=0.1, key="cxb_cost",
                            help="Starts from your sidebar round-trip fee. Robinhood's lowest tier is 0.95% per market or stop order and 0.50% per limit order.")
     years = b4.selectbox("History", ["2y", "3y", "5y"], index=1, key="cxb_years")
@@ -477,16 +511,17 @@ def backtest_tab(stop_mult, rr, fee):
     if st.button("Run crypto backtest", key="cxb_run"):
         with st.spinner("Downloading history and testing..."):
             frames, names, no_data = cached_frames(tuple(coins), years)
-            crit = cr.criteria(stop_atr_mult=stop_mult, reward_risk=rr, cost_pct=cost)
+            crit = cr.weekend_criteria(cost_pct=cost) if ww else cr.criteria(stop_atr_mult=stop_mult, reward_risk=rr, cost_pct=cost)
             params = bt.BTParams(setups=tuple(s.lower() for s in setups) or ("pullback",), stop_atr_mult=stop_mult,
                                  reward_risk=rr, max_hold=int(hold), cost_pct=cost)
-            trades = bt.run_backtest(frames, crit, params)
-            st.session_state["cxb_res"] = (trades, len(frames), len(coins), frames, params, crit)
+            trades = bt.run_backtest(frames, crit, params, weekday=cr.WW_DAY if ww else None)
+            st.session_state["cxb_res"] = (trades, len(frames), len(coins), frames, params, crit, bool(ww))
             st.session_state.pop("cxb_q", None)
     res = st.session_state.get("cxb_res")
     if not res:
         return
-    trades, loaded, asked, frames, params, crit = res
+    trades, loaded, asked, frames, params, crit, res_ww = res
+    weekday = cr.WW_DAY if res_ww else None
     st.caption(f"{loaded} of {asked} coins had data.")
     if trades.empty:
         st.info("No trades were generated with these settings.")
@@ -506,7 +541,7 @@ def backtest_tab(stop_mult, rr, fee):
         if st.button("Test the quality score", key="cxb_qbtn"):
             bench = frames.get(cr.BENCH)
             fr = {k: v for k, v in frames.items() if k != cr.BENCH}
-            qt = ql.score_trades(fr, crit, params, bench["Close"] if bench is not None else None)
+            qt = ql.score_trades(fr, crit, params, bench["Close"] if bench is not None else None, weekday=weekday)
             st.session_state["cxb_q"] = ql.evaluate(qt)
         q = st.session_state.get("cxb_q")
         if q:
