@@ -286,6 +286,11 @@ def show_table(df, **kw):
         st.dataframe(df, hide_index=True, use_container_width=True, **kw)
 
 
+def esc_md(text):
+    """Streamlit reads text between two $ signs as math, which garbles prices. Escape them."""
+    return text.replace("$", "\\$")
+
+
 def col_help(df, tips):
     """Hover help for table headers: pass {column name: plain-English tip}. Skips columns that aren't there."""
     try:
@@ -548,11 +553,11 @@ def show_plan(plan, info, acct):
     cols = [c for c in ["Symbol", "Price", "Shares", "Cost $", "Stop", "Target", "Risk $",
                         "Signal", "Setup", "Catalyst", "Earnings"] if c in plan.columns]
     show_table(plan[cols])
-    st.caption(f"Total cost ${info['plan_cost']:.2f} ({info['plan_cost'] / acct.value * 100:.0f}% of account). "
+    st.caption(esc_md(f"Total cost ${info['plan_cost']:.2f} ({info['plan_cost'] / acct.value * 100:.0f}% of account). "
                f"If every stop is hit you would lose about ${info['plan_risk']:.2f} "
                f"({info['plan_risk'] / acct.value * 100:.1f}% of account). A stop can fill lower if a stock "
                "gaps overnight, so the real loss can be bigger. This is a ceiling on planned stop risk, "
-               "not a guarantee of the most you can lose.")
+               "not a guarantee of the most you can lose."))
 
 
 @st.fragment(run_every=scan_minutes * 60 if scan_auto else None)
@@ -807,10 +812,10 @@ def show_range_box(sym, df, cone, flags):
     end = cone["dates"][-1]
     lo, hi = cone["end68"]
     lo2, hi2 = cone["end95"]
-    st.markdown(
+    st.markdown(esc_md(
         f"**Likely range by {end:%b %d}** ({h} trading days): **${lo:,.2f} to ${hi:,.2f}** about 2 times out of 3, "
         f"and **${lo2:,.2f} to ${hi2:,.2f}** almost always (about 19 times out of 20). That is roughly "
-        f"{(cone['pct68_down'] + cone['pct68']) / 2:.0f}% either way for the usual range.")
+        f"{(cone['pct68_down'] + cone['pct68']) / 2:.0f}% either way for the usual range."))
     atr = float(flags["atr"].iloc[-1])
     if atr == atr and atr > 0:
         stp = p0 - stop_mult * atr
@@ -828,7 +833,7 @@ def show_range_box(sym, df, cone, flags):
             notes.append(f"a stop at ${stp:,.2f} is above the bottom of the usual range, so ordinary wiggles could hit it")
         else:
             notes.append(f"a stop at ${stp:,.2f} sits below the usual range, so only a bigger-than-normal drop would hit it")
-        st.caption("With your current settings: " + "; ".join(notes) + ".")
+        st.caption(esc_md("With your current settings: " + "; ".join(notes) + "."))
     st.caption("This shows how far the stock could wander. It does not say which way. The bands are checked against "
                f"this stock's own history ({cone['samples']} past days), but surprises like earnings or big news can "
                "break through any range. It is a map of what is normal, not a promise.")
@@ -1384,7 +1389,7 @@ with tab_bt:
                        "'from' does not, the edge may not be real.")
             be = 100 / (1 + reward_risk)
             with st.expander("Why a low win rate can still be a good thing", expanded=False):
-                st.markdown(
+                st.markdown(esc_md(
                     f"Most beginners think a good system has to win most of the time. It doesn't. What matters is how "
                     f"much you make when you win compared with how much you lose when you lose.\n\n"
                     f"**Example with a {reward_risk:g}-to-1 target.** Say you risk $10 on each trade. A winner makes "
@@ -1398,7 +1403,7 @@ with tab_bt:
                     f"the average result per trade, in units of what you risked. Above 0 means the rules made "
                     f"money. A small positive number, repeated many times with small, controlled losses, is how "
                     f"swing trading builds up. Stops are not failures. They are the cost of doing business "
-                    f"that keeps each loss small.")
+                    f"that keeps each loss small."))
             eq = trades[trades["reason"] != "Still open"].sort_values("exit_date")
             st.line_chart(pd.DataFrame({"Cumulative R": eq["r"].cumsum().to_numpy()}, index=eq["exit_date"]))
             with st.expander("All simulated trades"):
