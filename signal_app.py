@@ -574,6 +574,26 @@ def show_details(sym, d, sig_interval):
                     unsafe_allow_html=True)
 
 
+PAST_TIPS = {
+    "Past setups": "How many times this same kind of setup showed up on this stock in the past (a finished trade "
+                   "each time: next-day entry, your stop and target). A small number means a small sample, so "
+                   "treat the next two columns with caution. Blank below 3.",
+    "Past hit target %": "Of those past setups on this stock, how often price reached the target before the stop "
+                         "or the time limit. With a 2-to-1 target, a bit over a third is break-even and "
+                         "more than that is profit. Timeouts count as not hitting it.",
+    "Past avg R": "Average result per past trade on this stock, in R (1R = what you risked). Above 0 means this "
+                  "setup made money on this stock on average after costs. Negative means it lost on average here, "
+                  "which is a reason to be pickier, not proof it will lose again.",
+    "Why ranked": "A plain-English reason this stock is on the list: the setup, how strong the volume was, and how "
+                  "the same setup has done on this stock before.",
+    "Catalyst": "Recent news (last 48 hours) that could be moving the stock. 'Quiet' means there are older headlines "
+                "but nothing new, which is normal for big, steady stocks. 'Headlines didn't load' means Yahoo "
+                "refused the request, so run the scan again.",
+    "Signal": "The chart's buy/sell signal engine on daily bars. 'No signal' just means it is not firing right now. "
+              "That is common and does not mean the setup is bad, since swing setups and this signal are different checks.",
+}
+
+
 def show_plan(plan, info, acct):
     st.markdown("#### Combined plan: what you could take together")
     st.caption(
@@ -588,8 +608,9 @@ def show_plan(plan, info, acct):
                 "Fractional shares or a wider budget would change that, but I would not loosen limits just to see picks.")
         return
     cols = [c for c in ["Symbol", "Price", "Shares", "Cost $", "Stop", "Target", "Risk $",
-                        "Signal", "Setup", "Catalyst", "Earnings"] if c in plan.columns]
-    show_table(plan[cols])
+                        "Setup", "Why ranked", "Past setups", "Past hit target %", "Past avg R",
+                        "Signal", "Catalyst", "Earnings"] if c in plan.columns]
+    show_table(plan[cols], column_config=col_help(plan[cols], PAST_TIPS))
     st.caption(esc_md(f"Total cost ${info['plan_cost']:.2f} ({info['plan_cost'] / acct.value * 100:.0f}% of account). "
                f"If every stop is hit you would lose about ${info['plan_risk']:.2f} "
                f"({info['plan_risk'] / acct.value * 100:.1f}% of account). A stop can fill lower if a stock "
@@ -612,7 +633,8 @@ def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, 
                     df, stats = sc.scan(criteria, symbols or None, also_market=also_market)
                 sig_interval = "1d" if preset == SWING else interval
                 df, details = sc.enrich(df, interval=sig_interval, threshold=threshold,
-                                        window=window, recent_bars=recent_bars)
+                                        window=window, recent_bars=recent_bars,
+                                        frames=sc.LAST_DAILY if preset == SWING else None)
                 st.session_state["scan_res"] = (df, stats, details, sig_interval, preset)
                 st.session_state["scan_err"] = None
                 try:  # keep a snapshot so you can measure later how these picks did
@@ -652,19 +674,17 @@ def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, 
         return
     if sort_by != "Signal rank (default)" and sort_by in df.columns:
         df = df.sort_values(sort_by, ascending=False, na_position="last")
+    bad_sig = [k for k, v in details.items() if v["signal"].get("error")]
+    bad_news = [k for k, v in details.items() if v["catalyst"].get("news_error")]
+    if bad_sig or bad_news:
+        st.warning(f"Yahoo refused some requests (signal data for {len(bad_sig)} stock(s), headlines for {len(bad_news)}), "
+                   "so those cells say they didn't load. This usually clears up if you wait a minute and run the scan again. "
+                   + (f"Example error: {(details[(bad_sig or bad_news)[0]]['signal'].get('error') or details[(bad_sig or bad_news)[0]]['catalyst'].get('news_error'))}"))
     show_table(df, column_config=col_help(df, {
         "15d range +/-%": "How far this stock usually moves in 15 trading days (about 2 times out of 3), up or down, "
                           "based on how much it has been moving lately. Compare it with the distance to the Target: "
                           "a target much bigger than this range is a long shot. It says nothing about direction.",
-        "Past setups": "How many times this same kind of setup showed up on this stock in the past (a finished trade "
-                       "each time: next-day entry, your stop and target). A small number means a small sample, so "
-                       "treat the next two columns with caution. Blank below 3.",
-        "Past hit target %": "Of those past setups on this stock, how often price reached the target before the stop "
-                             "or the time limit. With a 2-to-1 target, a bit over a third is break-even and "
-                             "more than that is profit. Timeouts count as not hitting it.",
-        "Past avg R": "Average result per past trade on this stock, in R (1R = what you risked). Above 0 means this "
-                      "setup made money on this stock on average after costs. Negative means it lost on average here, "
-                      "which is a reason to be pickier, not proof it will lose again."}))
+        **PAST_TIPS}))
     if info["enabled"]:
         st.caption("'Max shares / cost / risk' is the biggest position you could take in that ONE stock. "
                    "You cannot take them all at once. The combined plan below spends your shared budget in rank order.")

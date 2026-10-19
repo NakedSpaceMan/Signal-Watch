@@ -488,6 +488,7 @@ def steady_scan(c, tickers=None, workers=4, also_market=False):
     names = dict(universe)
     stats["universe"] = len(universe)
     last_bar = None
+    LAST_DAILY.clear()
 
     rows = []
     for sym, d in _daily_frames([u[0] for u in universe]):
@@ -583,11 +584,17 @@ def get_catalyst(sym, lookback_hours=48):
     """
     import yfinance as yf
 
-    out = {"headlines": [], "tags": [], "flags": [], "fresh": 0, "earnings_days": None}
+    out = {"headlines": [], "tags": [], "flags": [], "fresh": 0, "earnings_days": None, "news_error": "", "last_age_h": None}
     try:
         items = yf.Ticker(sym).news or []
-    except Exception:
+    except Exception as e:
         items = []
+        try:                                         # one more try after a short pause
+            import time
+            time.sleep(0.8)
+            items = yf.Ticker(sym).news or []
+        except Exception:
+            out["news_error"] = str(e)[:80] or type(e).__name__
     now = pd.Timestamp.now(tz="UTC")
     parsed = [p for p in (_parse_news_item(i) for i in items) if p]
     for p in parsed:
@@ -603,6 +610,8 @@ def get_catalyst(sym, lookback_hours=48):
     out["flags"] = [k for k, pat in RED_FLAG_PATTERNS.items()
                     if any(re.search(pat, t, re.I) for t in week_titles)]
     out["headlines"] = parsed[:8]
+    ages = [p["age_h"] for p in parsed if p["age_h"] is not None]
+    out["last_age_h"] = min(ages) if ages else None
     out["earnings_days"] = get_earnings_days(sym)
     return out
 
@@ -612,7 +621,12 @@ def catalyst_label(cat):
         return f"{', '.join(cat['tags'])} ({cat['fresh']} new)"
     if cat["fresh"]:
         return f"{cat['fresh']} new headlines, type unclear"
-    return "None found"
+    if cat.get("news_error"):
+        return "Headlines didn't load"
+    age = cat.get("last_age_h")
+    if age is not None:
+        return f"Quiet: newest headline {age_text(age)}"
+    return "No headlines on Yahoo"
 
 
 # ---------------------------------------------------------------- news check
@@ -932,20 +946,46 @@ def claude_prompt(sym, verdict, news, price=None, beginner=False):
 
 
 # ---------------------------------------------------------------- signal check
-def signal_summary(sym, interval="5m", threshold=3, window=5, recent_bars=6):
-    """Run the chart's signal engine on one stock and summarise where it stands."""
+# Daily bars the swing scan already downloaded, keyed by symbol, so the signal check does not have to download them
+# again (extra downloads at the same moment are what get Yahoo to refuse requests).
+LAST_DAILY = {}
+
+
+def _retry(fn, tries=3, delay=0.8):
+    """Call fn(); if it raises or returns nothing useful, wait a moment and try again. Returns (result, error_text)."""
+    import time
+    err = ""
+    for k in range(tries):
+        try:
+            r = fn()
+            if r is not None and len(r):
+                return r, ""
+            err = "Yahoo returned nothing"
+        except Exception as e:                      # rate limits and network blips land here
+            err = str(e)[:80] or type(e).__name__
+        if k < tries - 1:
+            time.sleep(delay * (k + 1))
+    return None, err
+
+
+def signal_summary(sym, interval="5m", threshold=3, window=5, recent_bars=6, raw=None):
+    """Run the chart's signal engine on one stock and summarise where it stands.
+    raw: bars you already have (skips the download)."""
     import yfinance as yf
 
-    blank = {"label": "No data", "rank": -999, "recent_buy": False, "side": None,
+    blank = {"label": "Data didn't load", "rank": -999, "recent_buy": False, "side": None,
              "reasons": [], "reasons_short": [], "reasons_plain": []}
-    try:
-        raw = yf.Ticker(sym).history(period=so.default_period(interval), interval=interval)
-        raw = raw[["Open", "High", "Low", "Close", "Volume"]].dropna()
-        raw = so.drop_unfinished_bar(raw, so.interval_to_timedelta(interval))
-    except Exception:
-        return blank
+    if raw is None:
+        got, err = _retry(lambda: yf.Ticker(sym).history(period=so.default_period(interval), interval=interval))
+        if got is None:
+            return {**blank, "error": err}
+        try:
+            raw = got[["Open", "High", "Low", "Close", "Volume"]].dropna()
+            raw = so.drop_unfinished_bar(raw, so.interval_to_timedelta(interval))
+        except Exception as e:
+            return {**blank, "error": str(e)[:80]}
     if len(raw) < so.MIN_BARS:
-        return {**blank, "label": "Not enough history"}
+        return {**blank, "label": f"Only {len(raw)} bars of history (need {so.MIN_BARS})"}
 
     df = so.add_indicators(raw)
     ev = so.detect_events(df)
@@ -1086,8 +1126,20 @@ def get_quote_extras(sym):
     return {"bid": None, "ask": None, "spread_pct": None}
 
 
-def _why_ranked(sig):
-    """Short plain-English reason for a row's signal rank."""
+def _why_ranked(sig, row=None):
+    """Short plain-English reason for a row's rank. For swing rows (which carry a Setup) this explains the setup itself."""
+    if row is not None and row.get("Setup"):
+        bits = [f"{row['Setup']}"]
+        if row.get("Day Vol x") == row.get("Day Vol x") and row.get("Day Vol x") is not None:
+            bits.append(f"volume {row['Day Vol x']:.1f}x normal")
+        n, hit, avg = row.get("Past setups"), row.get("Past hit target %"), row.get("Past avg R")
+        if n and hit == hit and hit is not None:
+            bits.append(f"hit target in {hit:.0f}% of {n} past setups here (avg {avg:+.2f}R)")
+        elif n:
+            bits.append(f"only {n} past setups here (too few to judge)")
+        if sig.get("side") in ("buy", "building"):
+            bits.append(sig["label"].lower())
+        return ", ".join(bits)
     reasons = [r for r in sig.get("reasons", []) if not r.startswith("CAUTION")]
     if not reasons:
         return sig["label"]
@@ -1096,7 +1148,7 @@ def _why_ranked(sig):
     return f"{sig['label']}: {first}"
 
 
-def enrich(df, interval="5m", threshold=3, window=5, recent_bars=6, lookback_hours=48, workers=4):
+def enrich(df, interval="5m", threshold=3, window=5, recent_bars=6, lookback_hours=48, workers=4, frames=None):
     """
     Add catalyst, signal and spread columns to scan results and sort stocks with
     the best current signals to the top. Returns (DataFrame, details-by-symbol).
@@ -1107,7 +1159,8 @@ def enrich(df, interval="5m", threshold=3, window=5, recent_bars=6, lookback_hou
 
     def job(sym):
         return (sym, get_catalyst(sym, lookback_hours),
-                signal_summary(sym, interval, threshold, window, recent_bars),
+                signal_summary(sym, interval, threshold, window, recent_bars,
+                               raw=(frames or {}).get(sym) if interval == "1d" else None),
                 get_quote_extras(sym))
 
     with ThreadPoolExecutor(workers) as ex:
@@ -1116,7 +1169,9 @@ def enrich(df, interval="5m", threshold=3, window=5, recent_bars=6, lookback_hou
 
     out = df.copy()
     out["Signal"] = [details[s]["signal"]["label"] for s in out["Symbol"]]
-    out["Why ranked"] = [_why_ranked(details[s]["signal"]) for s in out["Symbol"]]
+    rows_by_sym = {r["Symbol"]: r for r in out.to_dict("records")}
+    out["Why ranked"] = [_why_ranked(details[s]["signal"], rows_by_sym[s] if "Setup" in out.columns else None)
+                         for s in out["Symbol"]]
     out["Catalyst"] = [catalyst_label(details[s]["catalyst"]) for s in out["Symbol"]]
     out["Red flags"] = [", ".join(details[s]["catalyst"]["flags"]) or "-" for s in out["Symbol"]]
     out["Earnings"] = [("-" if details[s]["catalyst"]["earnings_days"] is None
@@ -1255,6 +1310,7 @@ def swing_scan(c, tickers=None, workers=4, also_market=False):
         if not found:
             continue
         stats["setup"] += 1
+        LAST_DAILY[sym] = d
 
         atr = float(f["atr"])
         try:
