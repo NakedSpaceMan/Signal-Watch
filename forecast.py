@@ -70,13 +70,10 @@ def _calibrate(close, horizon):
     return k_in, max(k_out, k_in + 0.4), len(z)
 
 
-def future_days(last_ts, n, every_day=False):
-    """The next n trading days (weekdays; skips real holidays when exchange_calendars is installed).
-    every_day=True is for crypto, which trades all seven days."""
+def future_days(last_ts, n):
+    """The next n trading days (weekdays; skips real holidays when exchange_calendars is installed)."""
     import signal_overlay as so
     start = pd.Timestamp(last_ts).tz_localize(None).normalize() if pd.Timestamp(last_ts).tzinfo else pd.Timestamp(last_ts).normalize()
-    if every_day:
-        return pd.DatetimeIndex([start + pd.Timedelta(days=k) for k in range(1, n + 1)])
     cal = so._calendar()
     days = []
     d = start
@@ -94,7 +91,7 @@ def future_days(last_ts, n, every_day=False):
     return pd.DatetimeIndex(days)
 
 
-def range_cone(df, horizon=HORIZON, min_history=MIN_HISTORY, dates=True, every_day=False):
+def range_cone(df, horizon=HORIZON, min_history=MIN_HISTORY, dates=True):
     """
     The likely-range cone for the next `horizon` trading days.
     Returns a dict, or None when there isn't enough history:
@@ -112,7 +109,7 @@ def range_cone(df, horizon=HORIZON, min_history=MIN_HISTORY, dates=True, every_d
     t = np.arange(1, horizon + 1)
     spread = s * np.sqrt(t)
     out = {
-        "dates": future_days(df.index[-1], horizon, every_day) if dates else None, "price": price, "sigma": s, "horizon": horizon,
+        "dates": future_days(df.index[-1], horizon) if dates else None, "price": price, "sigma": s, "horizon": horizon,
         "k_in": k_in, "k_out": k_out, "samples": n,
         "mid": np.full(horizon, price),
         "lo68": price * np.exp(-k_in * spread), "hi68": price * np.exp(k_in * spread),

@@ -52,7 +52,7 @@ def score_from_parts(p):
     return round(100 * sum(WEIGHTS[k] * v for k, v in have.items()) / w, 0)
 
 
-def explain(p, raw, bench="SPY"):
+def explain(p, raw):
     """Plain-English reasons, best first, mentioning the weak spot if there is one."""
     good, weak = [], []
     if p["past"] is not None:
@@ -63,8 +63,8 @@ def explain(p, raw, bench="SPY"):
             "target inside the usual range" if p["room"] >= 0.8 else "target is a stretch for this stock")
     if p["rs"] is not None:
         (good if p["rs"] >= 0.6 else weak if p["rs"] <= 0.25 else []).append(
-            f"beating the market ({raw['rs'] * 100:+.0f}% vs {bench} over 3 months)" if p["rs"] >= 0.6
-            else f"lagging the market ({raw['rs'] * 100:+.0f}% vs {bench} over 3 months)")
+            f"beating the market ({raw['rs'] * 100:+.0f}% vs SPY over 3 months)" if p["rs"] >= 0.6
+            else f"lagging the market ({raw['rs'] * 100:+.0f}% vs SPY over 3 months)")
     if p["trend"] is not None and p["trend"] >= 0.7:
         good.append("strong uptrend")
     if p["vol"] is not None:
@@ -76,7 +76,7 @@ def explain(p, raw, bench="SPY"):
     return ", ".join(out) if out else "middle of the pack on every measure"
 
 
-def feature_series(df, flags, spy_close, stop_mult, reward_risk, horizon=HORIZON):
+def feature_series(df, flags, spy_close, stop_mult, reward_risk):
     """Per-day inputs for every bar of one stock (uses only data up to each bar)."""
     close = df["Close"].astype(float)
     r = np.log(close).diff()
@@ -85,7 +85,7 @@ def feature_series(df, flags, spy_close, stop_mult, reward_risk, horizon=HORIZON
     sig = np.sqrt(0.6 * var + 0.4 * slow)
     atr = flags["atr"].astype(float)
     target_pct = reward_risk * stop_mult * atr / close
-    room = target_pct / (sig * np.sqrt(horizon))
+    room = target_pct / (sig * np.sqrt(HORIZON))
     trend = df["EMA20"] / df["EMA200"] - 1
     if spy_close is not None and len(spy_close):
         sp = spy_close.copy()
@@ -107,7 +107,7 @@ def score_row(feat_row, past_avg_r=None, past_n=0):
 
 
 # ----------------------------------------------------------------------------- testing the score on history
-def score_trades(frames, criteria, params, spy_close=None, progress=None, weekday=None):
+def score_trades(frames, criteria, params, spy_close=None, progress=None):
     """Backtest trades (as bt.run_backtest) with the score each one had on its signal day, using only earlier information."""
     import scanner as sc
 
@@ -119,11 +119,10 @@ def score_trades(frames, criteria, params, spy_close=None, progress=None, weekda
             continue
         df = so.add_indicators(d)
         flags = sc.swing_setup_flags(df, criteria)
-        trades = [t for t in bt.backtest_symbol(df, flags, params, weekday=weekday) if t["reason"] != "Still open"]
+        trades = [t for t in bt.backtest_symbol(df, flags, params) if t["reason"] != "Still open"]
         if not trades:
             continue
-        feat = feature_series(df, flags, spy_close, params.stop_atr_mult, params.reward_risk,
-                              getattr(criteria, "horizon", HORIZON))
+        feat = feature_series(df, flags, spy_close, params.stop_atr_mult, params.reward_risk)
         done = []
         for t in trades:                                    # trades come in time order, one at a time per stock
             i = t["signal_idx"]

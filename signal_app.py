@@ -34,41 +34,12 @@ import coach
 import forecast as fc
 import guide
 import learn
-import shared as sh
 import ledger as lg
 import scanner as sc
 import signal_overlay as so
 import swing_chart as swc
 
 st.set_page_config(page_title="Signal Watch", layout="wide")
-
-
-# ---- start screen: pick Stocks or Crypto. Each is its own environment with its own trades and settings.
-if st.session_state.get("app_mode") is None:
-    st.title("Signal Watch")
-    st.markdown("What do you want to work on?")
-    s1, s2 = st.columns(2)
-    with s1:
-        st.subheader("Stocks")
-        st.write("US stocks during market hours. Scanner, charts, portfolio, backtest, lessons.")
-        if st.button("Open Stocks", type="primary", key="mode_stocks", use_container_width=True):
-            st.session_state["app_mode"] = "stocks"
-            st.rerun()
-    with s2:
-        st.subheader("Crypto")
-        st.write("Coins that trade 24/7, weekends included. Same ideas, adapted: bigger moves, wider stops, Bitcoin as the market gauge.")
-        st.warning("**Untested against the real market.** Crypto mode hasn't been checked with live market data yet. "
-                   "Treat its picks as experimental and start with small amounts.")
-        if st.button("Open Crypto", type="primary", key="mode_crypto", use_container_width=True):
-            st.session_state["app_mode"] = "crypto"
-            st.rerun()
-    st.caption("Your stock and crypto trades are kept separately, but they share one account, so cash held in one is not available to the other. You can switch from the sidebar at any time. "
-               "Not financial advice.")
-    st.stop()
-if st.session_state.get("app_mode") == "crypto":
-    import crypto_app
-    crypto_app.run()
-    st.stop()
 
 
 SETTINGS_FILE = Path(__file__).with_name("signal_settings.json")
@@ -90,12 +61,6 @@ def get_store(path):
     return lg.Store(path)
 
 
-if st.sidebar.button("Switch to Crypto", key="switch_crypto"):
-    st.session_state["app_mode"] = "crypto"
-    st.rerun()
-if st.sidebar.button("← Back to start screen", key="back_start"):
-    st.session_state["app_mode"] = None
-    st.rerun()
 st.sidebar.header("Mode")
 practice = st.sidebar.checkbox("Practice mode (fake money)", value=bool(_saved.get("practice", False)),
                                help="A separate practice ledger, kept apart from your real trades. Good for "
@@ -464,11 +429,6 @@ pos = lg.build_positions(tx_all)
 held_prices = cached_prices(tuple(sorted(pos["open"]["Symbol"]))) if not pos["open"].empty else {}
 valued = lg.value_positions(pos["open"], held_prices, acct_value)
 psum = lg.portfolio_summary(valued, pos["closed"], pos["realized"], acct_value, cash_reserve)
-# Crypto lives in the same Robinhood account, so coins you hold reduce the cash stocks can use.
-crypto_mv, crypto_n = (0.0, 0) if practice else sh.crypto_held(cached_prices)
-if acct_value > 0 and crypto_mv > 0:
-    psum["cash_available"] = max((psum["cash_available"] or 0.0) - crypto_mv, 0.0)
-    psum["exposure_pct"] = (psum["market_value"] + crypto_mv) / acct_value * 100
 
 
 def make_account(**extra):
@@ -476,7 +436,7 @@ def make_account(**extra):
         value=acct_value, risk_pct=risk_pct, daily_risk=risk_budget, daily_used=extra_risk,
         max_position_pct=max_pos_pct, max_positions=int(max_new), fractional=fractional,
         stop_atr_mult=stop_mult, reward_risk=reward_risk,
-        cash_available=psum["cash_available"] if (acct_value > 0 and (not valued.empty or crypto_mv > 0)) else None,
+        cash_available=psum["cash_available"] if (acct_value > 0 and not valued.empty) else None,
         open_risk=psum["open_risk"], realized_today=psum["realized_today"],
         open_positions=psum["positions"], max_open_positions=int(max_open),
         held_symbols=tuple(valued["Symbol"]) if not valued.empty else (), **extra)
@@ -1258,9 +1218,6 @@ with tab_port:
               else money(psum["cash_available"]))
     m7.metric("Open positions", psum["positions"], None if max_open <= 0 else f"cap {int(max_open)}", delta_color="off")
     m8.metric("Largest position", "-" if psum["largest_pct"] is None else f"{psum['largest_pct']:.0f}%")
-    if crypto_mv > 0:
-        st.info(f"You also hold {money(crypto_mv)} in crypto ({crypto_n} position{'s' if crypto_n != 1 else ''}), so it is already "
-                "subtracted from Cash available. Same Robinhood account, same cash.")
     st.caption("'Risk to stops' is the estimated loss if every stop fills at its price. Positions with no stop "
                "recorded count as fully at risk. Gaps and poor fills can make a real loss bigger.")
 

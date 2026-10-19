@@ -1207,9 +1207,6 @@ class SwingCriteria:
     risk_dollars: float = 0.0            # if > 0, show shares so a stop-out loses about this much
     universe_size: int = 500
     min_dollar_volume: float = 10_000_000  # 30-day average dollars traded per day
-    cost_pct: float = 0.2                # round-trip fees and slippage assumed when replaying past setups
-    max_hold: int = 15                   # days a past setup is replayed before it is closed at the close
-    horizon: int = 15                    # days used for "room to target" (how far the stock usually moves)
 
 
 SETUP_LABELS = {"pullback": "Pullback", "breakout": "Breakout", "bounce": "Bounce"}
@@ -1273,8 +1270,7 @@ def setup_history(df, flags, found, c, min_trades=3):
     import backtest as bt
     out = {"trades": 0, "target_pct": None, "avg_r": None}
     try:
-        p = bt.BTParams(setups=tuple(found), stop_atr_mult=c.stop_atr_mult, reward_risk=c.reward_risk,
-                        cost_pct=getattr(c, "cost_pct", 0.2), max_hold=getattr(c, "max_hold", 15))
+        p = bt.BTParams(setups=tuple(found), stop_atr_mult=c.stop_atr_mult, reward_risk=c.reward_risk)
         trades = [t for t in bt.backtest_symbol(df, flags, p) if t["reason"] != "Still open"]
     except Exception:
         return out

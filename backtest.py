@@ -76,7 +76,7 @@ def simulate_trade(df, i, atr, p):
             "pnl_pct": net * 100, "r": net * entry / risk, "signal_idx": i}
 
 
-def backtest_symbol(df, flags, p, min_price=0.0, weekday=None):
+def backtest_symbol(df, flags, p, min_price=0.0):
     """All trades for one stock. `df` must have indicators; `flags` from scanner.swing_setup_flags."""
     trades, busy_until = [], -1
     keys = [k for k in ("pullback", "breakout", "bounce") if k in p.setups]
@@ -86,8 +86,6 @@ def backtest_symbol(df, flags, p, min_price=0.0, weekday=None):
     for k in keys:
         hit |= flags[k].to_numpy(bool)
     hit &= flags["filters_ok"].to_numpy(bool)
-    if weekday is not None:                       # only signals on this weekday (0=Mon ... 4=Fri), e.g. Fridays
-        hit &= np.asarray(pd.DatetimeIndex(df.index).weekday == weekday)
     atr = flags["atr"].to_numpy(float)
     for i in np.flatnonzero(hit):
         if i <= busy_until:
@@ -101,7 +99,7 @@ def backtest_symbol(df, flags, p, min_price=0.0, weekday=None):
     return trades
 
 
-def run_backtest(frames, criteria, p, progress=None, weekday=None):
+def run_backtest(frames, criteria, p, progress=None):
     """
     frames: {symbol: daily OHLCV DataFrame}. criteria: a scanner.SwingCriteria
     (liquidity and ATR filters). Returns a DataFrame with one row per trade.
@@ -116,7 +114,7 @@ def run_backtest(frames, criteria, p, progress=None, weekday=None):
             continue
         df = so.add_indicators(d)
         flags = sc.swing_setup_flags(df, criteria)
-        for t in backtest_symbol(df, flags, p, weekday=weekday):
+        for t in backtest_symbol(df, flags, p):
             t["symbol"] = sym
             rows.append(t)
     cols = ["symbol", "setup", "entry_date", "exit_date", "days", "entry", "stop", "target", "exit",

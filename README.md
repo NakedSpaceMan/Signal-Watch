@@ -8,27 +8,7 @@ read from the last three months of daily data, including an earnings check and a
 > through the unofficial `yfinance` library, so it can be delayed, wrong or missing. The app **never connects to a
 > brokerage and never places orders**. Your trades and settings stay in files on your own computer.
 
-## First things first
-
-When you open the app, the start screen asks whether you want **Stocks** or **Crypto**. Each is its own environment with its own trades and settings.
-
-## Both modes
-
-- **Learn tab:** lessons on reading a chart and trading support and resistance, bounces, breakouts, pullbacks, flags,
-  triangles, double bottoms, cup and handles and when to stay out, using made-up practice charts with every level marked,
-  plus quizzes and a **Practice trades** mode that scores you in R. No real money, nothing saved to your ledger.
-- **Beginner mode:** plain-English ("explain like I'm five") text everywhere.
-- **Guide tab:** what every box in the sidebar does.
-
-### One shared account
-
-Stocks and crypto draw from the same pool of money.
-
-- The account value is a single number, shared by both sides.
-- What you hold on one side is subtracted from the other side's free cash (`shared.py`).
-- The crypto sidebar shows your **Buying power**, with a hover note on where the rest of your money is.
-
-## Stocks
+## What it does
 
 - **Chart tab:** swing (daily) chart and live intraday chart, hover-to-learn markers, Buy / Hold / Sell verdict with reasons,
   earnings check (next date, past beats/misses, past price reactions), and a **News check** (tagged headlines,
@@ -37,31 +17,14 @@ Stocks and crypto draw from the same pool of money.
 - **Portfolio:** positions, stop-raising suggestions, trade history, price alerts. **Practice mode** keeps a separate fake-money ledger.
 - **Today / Weekly review:** a daily checklist and a weekly look back with praise and one thing to improve.
 - **Backtest & history:** test the swing rules on past data, with plain-English hover help on every column.
+- **Learn tab:** lessons on reading a chart and trading support and resistance, bounces, breakouts, pullbacks, flags,
+  triangles, double bottoms, cup and handles and when to stay out, using made-up practice charts with every level marked,
+  plus quizzes and a **Practice trades** mode that scores you in R. No real money, nothing saved to your ledger.
+- **Beginner mode:** plain-English ("explain like I'm five") text everywhere.
+- **Guide tab:** what every box in the sidebar does.
 
-## Crypto mode
-
-> [!WARNING]
-> **CRYPTO MODE IS UNTESTED AGAINST THE LIVE MARKET.**
-> It has only been checked with made-up data. Treat every pick as experimental, start with small amounts you can afford to lose,
-> and double-check prices and symbols in Robinhood before you trade.
-
-Crypto is its own environment for coins on Robinhood's list, with the same tabs as stocks (Scanner, Chart, Portfolio, Backtest, Learn, Guide).
-
-- **Trades 24/7:** weekends included. Daily candles close at midnight UTC (5 PM Pacific in summer, 4 PM in winter).
-- **Built for bigger swings:** wider stops and smaller positions than stocks.
-- **Market weather:** reads Bitcoin's trend (Sunny, Partly cloudy or Stormy) and gets pickier when it is weak.
-- **Fee aware:** results show "R after fees", using Robinhood's lowest-tier crypto fees as the default.
-- **Its own files:** trades in `signal_crypto.db` and settings in `crypto_settings.json`, apart from your stocks.
-
-### Weekend Warrior
-
-A sidebar checkbox for people who trade stocks during the week and want cash back before Monday.
-
-- **The plan:** buy on Friday night and sell by Sunday night, so cash is free when the stock market opens Monday at 6:30 AM Pacific.
-- **Tighter rules:** a tighter stop, a nearer target, and a two-day hold.
-- **Timing:** each plan row has a "Sell by" time, and a banner shows whether the weekend window is open.
-- **Backtest:** only tests setups seen on a Friday.
-- **Chart:** opens on the Monday-to-Sunday week.
+> **Why there is no crypto mode:** a crypto version (including a weekend-only plan) was built and backtested. After
+> Robinhood's trading fees it lost money at every hold length tested, so it was removed.
 
 ## Install and run
 

@@ -210,7 +210,7 @@ def build_swing_chart(df, flags, criteria, title, setups=("pullback", "breakout"
     fig.update_layout(title=title, template="plotly_dark", height=420 + 160 * len(panels),
                       xaxis_rangeslider_visible=False, hovermode="closest",
                       hoverlabel=dict(align="left"), legend=dict(orientation="h", y=1.04))
-    fig.update_xaxes(rangebreaks=cu.time_rangebreaks(df.index, always_open=bool(o.get('always_open'))))
+    fig.update_xaxes(rangebreaks=cu.time_rangebreaks(df.index))
     fig.update_yaxes(title_text="Price", row=1, col=1)
     return fig
 
