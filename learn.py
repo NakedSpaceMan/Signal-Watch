@@ -214,6 +214,17 @@ STOP_WHY = {"good": "Right: just beyond the level that proves the idea wrong, so
             "far": "Too far: a stop this deep means that if you're wrong you lose far more than the setup justifies."}
 
 
+HINTS = {
+    "range": "Price has been bouncing between a floor and a ceiling. Notice where the last candle sits compared with them.",
+    "bounce": "A sharp sell-off has run into a price where the stock stopped before, and the last candle has a long lower wick.",
+    "breakout": "Price kept getting turned back at the same ceiling, and the last candle just closed above it on heavy volume.",
+    "pullback": "The stock is in an uptrend and has just dipped to its rising orange line. The last candle is green.",
+    "flag": "A fast run-up was followed by a short, tight drift down on quiet volume, and the last candle breaks out of it.",
+    "triangle": "The highs are flat while the lows keep rising, squeezing price tighter, and the last candle closes above the flat top.",
+    "none": "Nothing stands out: no level that keeps repeating, no clean trend, no squeeze. Ask yourself if you could name a clear place for a stop.",
+}
+
+
 # ------------------------------------------------------------------ small UI helpers
 def _plot(fig, key):
     try:
@@ -339,7 +350,7 @@ def _quiz(key, L):
 
 # ------------------------------------------------------------------ practice mode
 def _score():
-    return st.session_state.setdefault("lrn_score", dict(trades=0, wins=0, r=0.0, skips=0, good_skips=0))
+    return st.session_state.setdefault("lrn_score", dict(trades=0, wins=0, r=0.0, skips=0, good_skips=0, hints=0))
 
 
 def _pkind(seed):
@@ -352,15 +363,15 @@ def _play(seed):
     kind = _pkind(seed)
     chart = lc.make_chart(kind, seed)
     action = ss.get(f"lrn_pa_{seed}", "Buy at the next open")
-    pct = float(ss.get(f"lrn_ps_{seed}", 4.0))
-    rr = float(ss.get(f"lrn_pt_{seed}", 2.0))
     sc = _score()
     p = chart["plan"]
-    res = {"seed": seed, "kind": kind, "action": action}
+    res = {"seed": seed, "kind": kind, "action": action, "hint": bool(ss.get(f"lrn_hint_{seed}"))}
     if action.startswith("Buy"):
         entry = p["entry"]
-        stop = entry * (1 - pct / 100)
-        target = entry + rr * (entry - stop)
+        stop = float(ss.get(f"lrn_ps_{seed}", 0.0))
+        target = float(ss.get(f"lrn_pt_{seed}", 0.0))
+        if not (0 < stop < entry < target):
+            return          # the form already explains this; nothing is played or scored
         out = lc.simulate_plan(chart["fut"], entry, stop, target)
         res.update(plan=dict(entry=entry, stop=stop, target=target), out=out)
         sc["trades"] += 1
@@ -369,8 +380,13 @@ def _play(seed):
     else:
         sc["skips"] += 1
         sc["good_skips"] += int(kind == "none")
+    sc["hints"] = sc.get("hints", 0) + int(res["hint"])
     ss["lrn_pres"] = res
     ss["lrn_pplayed"] = seed
+
+
+def _use_hint(seed):
+    st.session_state[f"lrn_hint_{seed}"] = True
 
 
 def _next_practice():
@@ -379,7 +395,7 @@ def _next_practice():
 
 
 def _reset_score():
-    st.session_state["lrn_score"] = dict(trades=0, wins=0, r=0.0, skips=0, good_skips=0)
+    st.session_state["lrn_score"] = dict(trades=0, wins=0, r=0.0, skips=0, good_skips=0, hints=0)
 
 
 def _practice_view(risk_dollars):
@@ -392,41 +408,72 @@ def _practice_view(risk_dollars):
     st.subheader("Practice trades")
     st.caption("Made-up charts, no money at risk, and nothing here touches your ledger. Decide at the dotted line: buy at the "
                "next open or skip, then pick your stop and target. Some charts have a real setup and some have nothing at all.")
-    m1, m2, m3, m4 = st.columns(4)
+    m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("Trades taken", sc["trades"])
     m2.metric("Win rate", f"{sc['wins'] / sc['trades'] * 100:.0f}%" if sc["trades"] else "-",
               help="How often your trade made money. A win rate near half is normal. What matters is the size of wins versus losses.")
     m3.metric("Avg R per trade", f"{sc['r'] / sc['trades']:+.2f}" if sc["trades"] else "-",
               help="Average result per trade in units of what you risked. Above 0 means you made money on average.")
     m4.metric("Skipped", sc["skips"], help="Skipping is a decision too. Skipping a chart with no setup is a good one.")
+    m5.metric("Hints used", sc.get("hints", 0), help="Fewer is better, but using a hint to learn is fine.")
 
     played = ss.get("lrn_pplayed") == seed
     res = ss.get("lrn_pres") if played else None
     if not played:
         _plot(lc.build_figure(chart, markup=False, reveal=False, show_plan=False), f"lrn_pfig_{seed}")
         last = float(chart["hist"].Close.iloc[-1])
-        a, b, c = st.columns(3)
-        a.radio("Your call", ["Buy at the next open", "Skip this one"], key=f"lrn_pa_{seed}")
-        pct = b.slider("Stop: % below your entry", 0.5, 12.0, 4.0, 0.5, key=f"lrn_ps_{seed}",
-                       help="Where you give up if you are wrong. Put it just beyond a level that would prove the idea wrong.")
-        c.select_slider("Target: times your risk", options=[1.0, 1.5, 2.0, 3.0, 4.0], value=2.0, key=f"lrn_pt_{seed}",
-                        help="How far above your entry you take profit, measured in units of what you risk. 2 means a win pays twice a loss.")
-        st.caption(_md(f"Last close ${last:,.2f}. With a {pct:g}% stop, your stop is about ${last * (1 - pct / 100):,.2f}."
-                       + (f" If you risked ${risk_dollars:,.2f} per trade, a loss costs about that much." if risk_dollars else "")))
-        with st.expander("Stuck? What to look for"):
+        buy_first = st.radio("Your call", ["Buy at the next open", "Skip this one"], key=f"lrn_pa_{seed}", horizontal=True)
+        buying = buy_first.startswith("Buy")
+        ok = True
+        if buying:
+            b1, b2 = st.columns(2)
+            stop_v = b1.number_input("Your stop price ($)", min_value=0.01, value=round(last * 0.95, 2), step=0.05,
+                                     format="%.2f", key=f"lrn_ps_{seed}",
+                                     help="If price falls to this, you sell and take the loss. Put it just beyond a level "
+                                          "that would prove your idea wrong.")
+            tgt_v = b2.number_input("Your target price ($)", min_value=0.01, value=round(last * 1.08, 2), step=0.05,
+                                    format="%.2f", key=f"lrn_pt_{seed}",
+                                    help="If price rises to this, you sell and take the profit. A spot where sellers have "
+                                         "shown up before, or a multiple of your risk.")
+            risk, reward = last - stop_v, tgt_v - last
+            if stop_v > last * 0.99 or tgt_v < last * 1.01:
+                ok = False
+                st.error(_md(f"Your stop must be below the last close (${last:,.2f}) and your target above it, each by at least 1%. "
+                             "You would buy at about the last close."))
+            else:
+                rr = reward / risk
+                st.caption(_md(
+                    f"Last close ${last:,.2f}. Risk ${risk:,.2f} per share ({risk / last * 100:.1f}%), reward ${reward:,.2f} "
+                    f"({reward / last * 100:.1f}%). Your reward is {rr:.1f} times your risk, so you would need to win about "
+                    f"{100 / (1 + rr):.0f}% of trades like this to break even."
+                    + (f" If you risked ${risk_dollars:,.2f}, a full win would be about ${risk_dollars * rr:,.2f}."
+                       if risk_dollars else "")))
+                if rr < 1:
+                    st.warning("Your target is closer than your stop. You would need to win more than half your trades just to break even.")
+            st.caption("Type a price, then press Enter.")
+        h1, h2 = st.columns([1, 3])
+        used = bool(ss.get(f"lrn_hint_{seed}"))
+        h1.button("Show one hint" if not used else "Hint used", key=f"lrn_hintbtn_{seed}", on_click=_use_hint, args=(seed,),
+                  disabled=used, help="One hint per chart. It tells you what is going on without giving away the stop or target.")
+        if used:
+            h2.info(HINTS[kind])
+        with st.expander("Stuck? A checklist"):
             st.markdown("- Is there a level price keeps turning around (support or resistance)?\n"
                         "- Is the stock in an uptrend (price above a rising orange line)?\n"
                         "- Is price squeezing into a tight range, or did it just break out on big volume?\n"
                         "- Can you see a spot for a stop that is clearly 'wrong if it breaks'?\n"
                         "- If you can't answer these, skipping is a fine choice.")
-        st.button("Play it out", key=f"lrn_play_{seed}", on_click=_play, args=(seed,), type="primary")
+        st.button("Play it out", key=f"lrn_play_{seed}", on_click=_play, args=(seed,), type="primary", disabled=not ok)
         return
 
     # ---- result
     p = chart["plan"]
     if res["action"].startswith("Buy"):
         _plot(lc.build_figure(chart, markup=False, reveal=True, user_plan=res["plan"], show_plan=False), f"lrn_pres_{seed}")
+        pl = res["plan"]
         st.markdown(_md(_result_line(res["out"], risk_dollars)))
+        st.caption(_md(f"Your plan: buy about ${pl['entry']:,.2f}, stop ${pl['stop']:,.2f}, target ${pl['target']:,.2f} "
+                       f"({(pl['target'] - pl['entry']) / (pl['entry'] - pl['stop']):.1f} times your risk)."))
     else:
         _plot(lc.build_figure(chart, markup=False, reveal=True, show_plan=False), f"lrn_pres_{seed}")
         st.markdown("**You skipped.**")
