@@ -57,7 +57,8 @@ _saved = load_settings()
 
 
 @st.cache_resource
-def get_store(path):
+def get_store(path, code_version=0.0):
+    # code_version changes when ledger.py is replaced, so an updated Store is used without restarting the app
     return lg.Store(path)
 
 
@@ -65,7 +66,11 @@ st.sidebar.header("Mode")
 practice = st.sidebar.checkbox("Practice mode (fake money)", value=bool(_saved.get("practice", False)),
                                help="A separate practice ledger, kept apart from your real trades. Good for "
                                     "learning or letting someone else try the app.")
-store = get_store(str(PRACTICE_DB if practice else lg.DB_PATH))
+try:
+    _ledger_version = Path(lg.__file__).stat().st_mtime
+except OSError:
+    _ledger_version = 0.0
+store = get_store(str(PRACTICE_DB if practice else lg.DB_PATH), _ledger_version)
 
 # ====================================================================== sidebar
 st.session_state.setdefault("ticker_input", "AAPL")
