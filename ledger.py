@@ -711,3 +711,36 @@ def summarize_evaluation(ev):
             if len(resolved) else np.nan,
         })
     return pd.DataFrame(out)
+
+
+def payoff_table(valued, account_value=0.0):
+    """
+    What each open position would add to or take from your account if its stop or its target is hit.
+    Measured against what you paid (average cost), so it is the profit or loss you would actually end up with on
+    that position. A raised stop above your cost shows as a locked-in gain. Positions with no stop or target
+    recorded get blank cells and are left out of that total.
+    Returns (table, totals). totals: stop_total, target_total, missing_stop, missing_target, plus % of account.
+    """
+    import numpy as np
+    import pandas as pd
+
+    if valued is None or valued.empty:
+        return pd.DataFrame(), {"stop_total": 0.0, "target_total": 0.0, "missing_stop": 0, "missing_target": 0,
+                                "stop_pct": None, "target_pct": None}
+    d = valued[["Symbol", "Shares", "Avg cost", "Price", "Stop", "Target"]].copy()
+    stop = pd.to_numeric(d["Stop"], errors="coerce")
+    target = pd.to_numeric(d["Target"], errors="coerce")
+    stop = stop.where(stop > 0)
+    target = target.where(target > 0)
+    d["If stop hits $"] = ((stop - d["Avg cost"]) * d["Shares"]).round(2)
+    d["If target hits $"] = ((target - d["Avg cost"]) * d["Shares"]).round(2)
+    if account_value and account_value > 0:
+        d["Stop, % of account"] = (d["If stop hits $"] / account_value * 100).round(1)
+        d["Target, % of account"] = (d["If target hits $"] / account_value * 100).round(1)
+    st_tot = float(np.nansum(d["If stop hits $"])) if d["If stop hits $"].notna().any() else 0.0
+    tg_tot = float(np.nansum(d["If target hits $"])) if d["If target hits $"].notna().any() else 0.0
+    totals = {"stop_total": round(st_tot, 2), "target_total": round(tg_tot, 2),
+              "missing_stop": int(d["If stop hits $"].isna().sum()), "missing_target": int(d["If target hits $"].isna().sum()),
+              "stop_pct": round(st_tot / account_value * 100, 1) if account_value and account_value > 0 else None,
+              "target_pct": round(tg_tot / account_value * 100, 1) if account_value and account_value > 0 else None}
+    return d.drop(columns=["Price"]), totals

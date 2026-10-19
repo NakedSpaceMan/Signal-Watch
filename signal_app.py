@@ -1229,6 +1229,32 @@ with tab_port:
         show_table(rnd(valued[cols]))
         st.caption("Prices are from Yahoo and can be delayed. 'To stop %' is how far price is above your stop.")
 
+        st.markdown("#### If your stops or targets are hit")
+        pay, ptot = lg.payoff_table(valued, acct_value)
+        p1, p2, p3 = st.columns(3)
+        p1.metric("If every stop is hit", money(ptot["stop_total"]),
+                  None if ptot["stop_pct"] is None else f"{ptot['stop_pct']:+.1f}% of account", delta_color="off")
+        p2.metric("If every target is hit", money(ptot["target_total"]),
+                  None if ptot["target_pct"] is None else f"{ptot['target_pct']:+.1f}% of account", delta_color="off")
+        p3.metric("Gap between the two", money(ptot["target_total"] - ptot["stop_total"]),
+                  help="How much the outcome swings between 'every stop hit' and 'every target hit'.")
+        show_table(rnd(pay), column_config=col_help(pay, {
+            "If stop hits $": "Profit or loss on this position if your stop fills at its price, compared with what you paid "
+                              "(shares x (stop - average cost)). Positive means the stop is above your cost, so a stop-out "
+                              "would still lock in a gain.",
+            "If target hits $": "Profit on this position if your target fills at its price, compared with what you paid.",
+            "Stop, % of account": "That stop result as a share of your account value (set in the sidebar).",
+            "Target, % of account": "That target result as a share of your account value."}))
+        _gone = []
+        if ptot["missing_stop"]:
+            _gone.append(f"{ptot['missing_stop']} position(s) have no stop recorded, so they are blank and NOT in the stop total "
+                         "(with no stop the real loss is unlimited down to zero)")
+        if ptot["missing_target"]:
+            _gone.append(f"{ptot['missing_target']} position(s) have no target recorded and are left out of the target total")
+        st.caption(esc_md("Measured against what you paid, using the stop and target you recorded. These are best and worst "
+                          "cases at those exact prices: a stop can fill lower after an overnight gap, and not every target "
+                          "will be hit. " + ("; ".join(_gone) + "." if _gone else "")))
+
         st.markdown("#### Raise your stops")
         sugs = lg.stop_suggestions(valued, plain=beginner)
         if not sugs:
