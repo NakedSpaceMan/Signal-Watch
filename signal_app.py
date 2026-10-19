@@ -285,6 +285,73 @@ def show_table(df, **kw):
         st.dataframe(df, hide_index=True, use_container_width=True, **kw)
 
 
+def col_help(df, tips):
+    """Hover help for table headers: pass {column name: plain-English tip}. Skips columns that aren't there."""
+    try:
+        return {c: st.column_config.Column(c, help=tips[c]) for c in df.columns if c in tips}
+    except Exception:  # older Streamlit without column_config
+        return {}
+
+
+BT_TIPS = {
+    "Period": "Which slice of history this row covers. 'All' is everything. The other two split it at your split "
+              "date, so you can see whether the rules also worked on the newer data.",
+    "Trades": "How many pretend trades the rules would have taken. More is better. Under about 30 trades is too "
+              "few to trust any of the other numbers.",
+    "Win rate %": "How often a trade reached its target before its stop. A LOW win rate is normal and fine here: "
+                  "because winners are set to pay more than losers cost, you can lose most trades and still make "
+                  "money. With a 2-to-1 target, you only need to win about 1 in 3.",
+    "Avg R": "The average result per trade, measured in units of what you risked (R). +0.2R means that on average "
+             "you made 20% of your risk per trade, after costs. Anything above 0 means the rules made money on "
+             "average. Small positive numbers are good and realistic. Very big ones usually mean something is off.",
+    "Avg win R": "How much a winning trade made on average, in units of risk. +2R means winners paid twice what "
+                 "you risked.",
+    "Avg loss R": "How much a losing trade lost on average, in units of risk. Close to -1R means the stop did its "
+                  "job and you lost about what you planned. Worse than -1R means gaps or costs made losses bigger.",
+    "Profit factor": "Total money won divided by total money lost. Above 1.0 means winners outweighed losers. "
+                     "1.3 or more is decent. Blank means there were no losing trades.",
+    "Avg days": "How long a typical trade lasted, in trading days (weekends and holidays don't count).",
+    "Max drawdown R": "The worst losing stretch: how far the running total fell from its best point, in units of "
+                      "risk. It tells you how bad a rough patch can feel. Plan for it, because it will happen.",
+    "Gap stops": "Trades where the price jumped past your stop overnight, so you got out at a worse price than "
+                 "planned. This is a real risk of holding overnight, and the test includes it.",
+    "Most open at once": "The most trades the rules would have held at the same time. With a small account you "
+                         "can't hold that many, so treat it as a ceiling.",
+    "symbol": "The stock.", "setup": "Which pattern triggered the trade: Pullback, Breakout or Bounce.",
+    "entry_date": "The day the pretend trade was opened (the morning after the signal).",
+    "exit_date": "The day the pretend trade was closed.",
+    "days": "Trading days the trade lasted.", "entry": "Price paid (that morning's open).",
+    "stop": "The price where the trade would be given up to limit the loss.",
+    "target": "The price where the trade would be closed to take profit.",
+    "exit": "The price the trade actually closed at.",
+    "reason": "Why it closed: Target (profit), Stop (loss), Time limit (held the max days), or a Gap (price jumped "
+              "past the level overnight).",
+    "pnl_pct": "Profit or loss as a percent of the money put in, after costs.",
+    "r": "Result in units of risk. +2 means it made twice what was risked; -1 means it lost what was risked.",
+}
+
+SCAN_TIPS = {
+    "Preset": "The scanner preset you used for that scan.",
+    "Picks": "How many stocks the scans suggested.",
+    "Avg 1d %": "Average price change one trading day after the scan, from the price when it was scanned.",
+    "Avg 5d %": "Average price change five trading days after the scan.",
+    "Avg 10d %": "Average price change ten trading days after the scan.",
+    "Up after 5d %": "Share of picks that were higher five days later. Around 50% is a coin flip. What matters "
+                     "more is how much winners gained versus how much losers lost.",
+    "Target first": "Picks that hit the suggested target before the stop (within 10 trading days).",
+    "Stop first": "Picks that hit the stop before the target. Stops are meant to be hit sometimes. That is how "
+                  "losses stay small.",
+    "Target-first rate %": "Of the picks that reached either level, the share that reached the target first. "
+                           "Even 35-40% can be profitable when the target is twice as far as the stop.",
+    "Scan": "The saved scan this pick came from.", "Scanned": "The day of the scan.",
+    "Symbol": "The stock.", "Setup": "Which pattern the scanner saw.", "Signal": "The scanner's signal at the time.",
+    "Price": "The price when the scan ran.",
+    "1d %": "Price change one trading day later.", "5d %": "Price change five trading days later.",
+    "10d %": "Price change ten trading days later.",
+    "Result": "Target first, Stop first, Neither yet, Still open (not enough days have passed), or Too early.",
+}
+
+
 def _age_text(hours):
     if hours is None or pd.isna(hours):
         return ""
@@ -1219,13 +1286,32 @@ with tab_bt:
                         "Profit factor": round(m["profit_factor"], 2) if m["profit_factor"] != float("inf") else None,
                         "Avg days": round(m["avg_days"], 1), "Max drawdown R": round(m["max_drawdown_r"], 1),
                         "Gap stops": m["gap_stops"], "Most open at once": m["max_concurrent"]}
-            show_table(pd.DataFrame([row("All", allm), row(f"Before {split}", before), row(f"From {split}", after)]))
-            st.caption("R = profit measured in units of the risk taken. Avg R above 0 means the average trade made money "
-                       "after costs. If 'before' looks great and 'from' does not, the edge may not be real.")
+            summ = pd.DataFrame([row("All", allm), row(f"Before {split}", before), row(f"From {split}", after)])
+            show_table(summ, column_config=col_help(summ, BT_TIPS))
+            st.caption("Hover over a column title for a plain-English explanation. If 'before' looks great and "
+                       "'from' does not, the edge may not be real.")
+            be = 100 / (1 + reward_risk)
+            with st.expander("Why a low win rate can still be a good thing", expanded=False):
+                st.markdown(
+                    f"Most beginners think a good system has to win most of the time. It doesn't. What matters is how "
+                    f"much you make when you win compared with how much you lose when you lose.\n\n"
+                    f"**Example with a {reward_risk:g}-to-1 target.** Say you risk $10 on each trade. A winner makes "
+                    f"${10 * reward_risk:g}; a loser costs $10. Take 10 trades with only 4 winners: "
+                    f"4 x ${10 * reward_risk:g} = **+${4 * 10 * reward_risk:g}**, and 6 x $10 = **-$60**. "
+                    f"Net: **{'+' if 4 * 10 * reward_risk - 60 >= 0 else '-'}${abs(4 * 10 * reward_risk - 60):g}**, "
+                    f"even though you lost more often than you won.\n\n"
+                    f"**With your current settings you only need to win about {be:.0f}% of trades to break even** "
+                    f"(1 divided by {1 + reward_risk:g}). Anything above that, after costs, is profit.\n\n"
+                    f"**Avg R is the number to watch.** It folds win rate, win size and loss size into one figure: "
+                    f"the average result per trade, in units of what you risked. Above 0 means the rules made "
+                    f"money. A small positive number, repeated many times with small, controlled losses, is how "
+                    f"swing trading builds up. Stops are not failures. They are the cost of doing business "
+                    f"that keeps each loss small.")
             eq = trades[trades["reason"] != "Still open"].sort_values("exit_date")
             st.line_chart(pd.DataFrame({"Cumulative R": eq["r"].cumsum().to_numpy()}, index=eq["exit_date"]))
             with st.expander("All simulated trades"):
-                show_table(rnd(trades))
+                _tr = rnd(trades)
+                show_table(_tr, column_config=col_help(_tr, BT_TIPS))
                 st.download_button("Download trades as CSV", trades.to_csv(index=False), "backtest_trades.csv", "text/csv")
 
     st.subheader("How saved scans performed")
@@ -1248,9 +1334,11 @@ with tab_bt:
                     st.error(f"Couldn't evaluate: {e}")
         ev = st.session_state.get("scan_eval")
         if ev is not None and not ev.empty:
-            show_table(rnd(lg.summarize_evaluation(ev)))
+            _sm = rnd(lg.summarize_evaluation(ev))
+            show_table(_sm, column_config=col_help(_sm, SCAN_TIPS))
             with st.expander("Each pick"):
-                show_table(rnd(ev))
+                _ev = rnd(ev)
+                show_table(_ev, column_config=col_help(_ev, SCAN_TIPS))
             st.caption("'Target first' means the suggested target was reached before the stop within 10 trading days. "
                        "Picks from today have no future days yet, so they only appear once a later session has closed.")
         elif ev is not None:

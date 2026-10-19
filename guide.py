@@ -146,6 +146,16 @@ GLOSSARY = [
     ("Copy for Claude", "Copies a ready-made question (headlines + the app's verdict) to paste into a Claude chat. Open Claude "
                         "in a new tab opens claude.ai so you can paste and send. Afterwards pick Good / Neutral / Bad under the "
                         "headlines. 'Bad news' holds a BUY back; your pick is remembered until you close the app."),
+    ("Win rate (and why low is okay)", "The share of trades that reached the target before the stop. You do not need to win most "
+                                       "trades. If winners pay twice what losers cost, winning only about 1 trade in 3 breaks even, "
+                                       "and anything above that is profit. Stops are not failures: they keep each loss small."),
+    ("R and Avg R", "R is the amount you planned to risk on a trade. +2R means you made twice that; -1R means you lost it. "
+                    "Avg R is the average result per trade in those units. Above 0 means the rules made money after costs. "
+                    "A small positive number repeated many times is how swing trading builds up."),
+    ("Profit factor", "Total money won divided by total money lost. Above 1.0 means winners outweighed losers; 1.3 or more is decent."),
+    ("Max drawdown", "The worst losing stretch: how far your running total fell from its best point. It shows how rough a bad "
+                     "patch can feel, so you can plan for it."),
+    ("Gap stop", "The price jumped past your stop overnight, so you got out at a worse price than planned. A real risk of holding overnight."),
 ]
 
 FILES = ("Your real trades are stored in signal_ledger.db, practice trades in signal_practice.db, and your sidebar "
