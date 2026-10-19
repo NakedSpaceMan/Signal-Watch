@@ -57,10 +57,12 @@ if st.session_state.get("app_mode") is None:
     with s2:
         st.subheader("Crypto")
         st.write("Coins that trade 24/7, weekends included. Same ideas, adapted: bigger moves, wider stops, Bitcoin as the market gauge.")
+        st.warning("**Untested against the real market.** Crypto mode hasn't been checked with live market data yet. "
+                   "Treat its picks as experimental and start with small amounts.")
         if st.button("Open Crypto", type="primary", key="mode_crypto", use_container_width=True):
             st.session_state["app_mode"] = "crypto"
             st.rerun()
-    st.caption("Your stock and crypto trades and settings are kept separately. You can switch from the sidebar at any time. "
+    st.caption("Your stock and crypto trades are kept separately, but they share one account, so cash held in one is not available to the other. You can switch from the sidebar at any time. "
                "Not financial advice.")
     st.stop()
 if st.session_state.get("app_mode") == "crypto":
