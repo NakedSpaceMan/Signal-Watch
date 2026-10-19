@@ -183,6 +183,11 @@ GLOSSARY = [
                                                    "target first. 'Avg R' above 0 means it paid off on average there. Few past "
                                                    "setups means a small sample, so the other two are left blank under 3. It is "
                                                    "a sanity check, not a promise."),
+    ("Score (setup quality)", "A 0-100 number the Swing scanner uses to rank results. It blends how that setup did on the same stock "
+                              "before (30%), whether the target sits inside the stock's usual 15-day range (25%), whether the stock "
+                              "has been beating the market (20%), trend strength (15%) and volume (10%). The weights are a "
+                              "starting guess, not proven. In the Backtest tab, 'Does the quality score actually help?' tests it on "
+                              "past trades and tells you plainly if the answer is no."),
     ("Profit factor", "Total money won divided by total money lost. Above 1.0 means winners outweighed losers; 1.3 or more is decent."),
     ("Max drawdown", "The worst losing stretch: how far your running total fell from its best point. It shows how rough a bad "
                      "patch can feel, so you can plan for it."),

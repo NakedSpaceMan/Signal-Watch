@@ -575,6 +575,13 @@ def show_details(sym, d, sig_interval):
 
 
 PAST_TIPS = {
+    "Score": "Setup quality from 0 to 100: how this setup did on this stock before (30%), whether the target is inside "
+             "the stock's usual range (25%), strength against the market (20%), trend strength (15%) and volume (10%). "
+             "Higher is better. It is a starting guess, not a promise; the Backtest tab can test whether it helps.",
+    "Room x": "Target distance divided by the stock's usual 15-day move. Under about 1 means the target is inside the "
+              "usual range; above 1.5 it is a stretch and may just time out.",
+    "vs SPY 3mo %": "How much the stock beat (+) or lagged (-) the S&P 500 over about 3 months. Leaders tend to hold "
+                    "their setups better.",
     "Past setups": "How many times this same kind of setup showed up on this stock in the past (a finished trade "
                    "each time: next-day entry, your stop and target). A small number means a small sample, so "
                    "treat the next two columns with caution. Blank below 3.",
@@ -608,7 +615,7 @@ def show_plan(plan, info, acct):
                 "Fractional shares or a wider budget would change that, but I would not loosen limits just to see picks.")
         return
     cols = [c for c in ["Symbol", "Price", "Shares", "Cost $", "Stop", "Target", "Risk $",
-                        "Setup", "Why ranked", "Past setups", "Past hit target %", "Past avg R",
+                        "Setup", "Score", "Why ranked", "Past setups", "Past hit target %", "Past avg R",
                         "Signal", "Catalyst", "Earnings"] if c in plan.columns]
     show_table(plan[cols], column_config=col_help(plan[cols], PAST_TIPS))
     st.caption(esc_md(f"Total cost ${info['plan_cost']:.2f} ({info['plan_cost'] / acct.value * 100:.0f}% of account). "
@@ -655,6 +662,8 @@ def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, 
     df, stats, details, sig_interval, ran_preset = res
     when = time.strftime("%H:%M:%S", time.localtime(st.session_state["scan_ts"]))
     st.caption(f"Scanned {when}  ·  {sc.stats_line(stats)}")
+    if stats.get("spy_ok") is False:
+        st.caption("Couldn't download SPY, so the Score leaves out 'strength vs the market' this time.")
     st.caption(sc.data_line(stats))
     if ran_preset != preset:
         st.warning(f"These results are from the '{PRESET_SHORT[ran_preset]}' scan. Press Run scan to refresh "
@@ -672,7 +681,7 @@ def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, 
         st.info("No matches right now" + (" with a recent BUY signal." if only_buy else "")
                 + (" that fit your account limits." if info["enabled"] and hide_nofit else "."))
         return
-    if sort_by != "Signal rank (default)" and sort_by in df.columns:
+    if not sort_by.endswith("(default)") and sort_by in df.columns:
         df = df.sort_values(sort_by, ascending=False, na_position="last")
     bad_sig = [k for k, v in details.items() if v["signal"].get("error")]
     bad_news = [k for k, v in details.items() if v["catalyst"].get("news_error")]
@@ -754,9 +763,9 @@ with tab_scan:
     only_buy = o1.checkbox("Only show stocks with a recent BUY signal", value=False)
     hide_nofit = o2.checkbox("Hide stocks that don't fit my account", value=True)
     recent_bars = o3.number_input("Count a BUY as recent for (bars)", min_value=1, max_value=30, value=6)
-    sort_cols = {SWING: ["Day Vol x", "RSI", "Risk %"], STEADY: ["Avg Vol (M)", "RSI", "ATR %"],
+    sort_cols = {SWING: ["Score", "Day Vol x", "RSI", "Risk %"], STEADY: ["Avg Vol (M)", "RSI", "ATR %"],
                  MOMENTUM: ["Rel Vol", "Change %", "Volume"]}[preset]
-    sort_by = o4.selectbox("Sort by", ["Signal rank (default)"] + sort_cols)
+    sort_by = o4.selectbox("Sort by", ["Quality score (default)" if preset == SWING else "Signal rank (default)"] + sort_cols)
 
     wl = store.watchlists()
     w1, w2 = st.columns(2)
@@ -1425,6 +1434,9 @@ with tab_bt:
             else:
                 bar = st.progress(0.0, text="Downloading history...")
                 frames = bt.load_daily(syms, period=bt_years)
+                _spy = bt.load_daily(["SPY"], period=bt_years).get("SPY")
+                st.session_state["bt_frames"] = (frames, _spy["Close"] if _spy is not None else None)
+                st.session_state.pop("bt_quality", None)
                 crit = sc.SwingCriteria(stop_atr_mult=stop_mult, reward_risk=reward_risk)
                 params = bt.BTParams(setups=tuple(s.lower() for s in bt_setups) or ("pullback",),
                                      stop_atr_mult=stop_mult, reward_risk=reward_risk,
@@ -1477,6 +1489,32 @@ with tab_bt:
                     f"that keeps each loss small."))
             eq = trades[trades["reason"] != "Still open"].sort_values("exit_date")
             st.line_chart(pd.DataFrame({"Cumulative R": eq["r"].cumsum().to_numpy()}, index=eq["exit_date"]))
+            with st.expander("Does the quality score actually help? (test on these same trades)"):
+                st.caption("The scanner ranks setups with a 0-100 score. This checks, using only information that existed "
+                           "on each signal day, whether higher scores really did better, compared with the old "
+                           "sort by volume. If the gap is within the noise, it says so.")
+                if st.button("Test the quality score", key="bt_quality_btn"):
+                    fr = st.session_state.get("bt_frames")
+                    if not fr:
+                        st.info("Run the backtest first.")
+                    else:
+                        import quality as ql
+                        with st.spinner("Scoring every past setup..."):
+                            qt = ql.score_trades(fr[0], sc.SwingCriteria(stop_atr_mult=stop_mult, reward_risk=reward_risk),
+                                                 bt.BTParams(setups=tuple(s.lower() for s in bt_setups) or ("pullback",),
+                                                             stop_atr_mult=stop_mult, reward_risk=reward_risk,
+                                                             max_hold=int(bt_hold), cost_pct=bt_cost), fr[1])
+                        st.session_state["bt_quality"] = ql.evaluate(qt)
+                        if fr[1] is None:
+                            st.warning("Couldn't download SPY, so 'strength vs the market' was left out of the score here.")
+                qres = st.session_state.get("bt_quality")
+                if qres:
+                    qtab, qverdict = qres
+                    if len(qtab):
+                        show_table(qtab)
+                    (st.success if "evidence the score helps" in qverdict else st.warning if "WORSE" in qverdict else st.info)(qverdict)
+                    st.caption("Thirds are by score among all setups. More stocks and years make this more reliable. Even a "
+                               "real edge in the past can fade, so keep the stop on every trade.")
             with st.expander("All simulated trades"):
                 _tr = rnd(trades)
                 show_table(_tr, column_config=col_help(_tr, BT_TIPS))

@@ -488,7 +488,6 @@ def steady_scan(c, tickers=None, workers=4, also_market=False):
     names = dict(universe)
     stats["universe"] = len(universe)
     last_bar = None
-    LAST_DAILY.clear()
 
     rows = []
     for sym, d in _daily_frames([u[0] for u in universe]):
@@ -1129,6 +1128,9 @@ def get_quote_extras(sym):
 def _why_ranked(sig, row=None):
     """Short plain-English reason for a row's rank. For swing rows (which carry a Setup) this explains the setup itself."""
     if row is not None and row.get("Setup"):
+        if row.get("_score_why"):
+            s = f"{row['Setup']}, score {(row['Score'] if row['Score'] == row['Score'] and row['Score'] is not None else 0):.0f}: {row['_score_why']}"
+            return s + (f", {sig['label'].lower()}" if sig.get("side") in ("buy", "building") else "")
         bits = [f"{row['Setup']}"]
         if row.get("Day Vol x") == row.get("Day Vol x") and row.get("Day Vol x") is not None:
             bits.append(f"volume {row['Day Vol x']:.1f}x normal")
@@ -1179,7 +1181,13 @@ def enrich(df, interval="5m", threshold=3, window=5, recent_bars=6, lookback_hou
                               else f"in {details[s]['catalyst']['earnings_days']}d")) for s in out["Symbol"]]
     out["Spread %"] = [details[s]["quote"]["spread_pct"] for s in out["Symbol"]]
     out["_rank"] = [details[s]["signal"]["rank"] for s in out["Symbol"]]
-    out = out.sort_values("_rank", ascending=False, kind="stable").drop(columns="_rank").reset_index(drop=True)
+    if "Score" in out.columns:                      # swing results are ranked by quality score; signal only breaks ties
+        out = out.sort_values(["Score", "_rank"], ascending=False, kind="stable", na_position="last")
+    else:
+        out = out.sort_values("_rank", ascending=False, kind="stable")
+    out = out.drop(columns="_rank").reset_index(drop=True)
+    if "_score_why" in out.columns:
+        out = out.drop(columns="_score_why")
     return out, details
 
 
@@ -1273,6 +1281,16 @@ def setup_history(df, flags, found, c, min_trades=3):
     return out
 
 
+def spy_daily_close():
+    """SPY's daily closes (for 'beating the market'), or None if Yahoo won't give them."""
+    try:
+        import yfinance as yf
+        d, _ = _retry(lambda: yf.Ticker("SPY").history(period="2y", interval="1d"))
+        return d["Close"].dropna() if d is not None else None
+    except Exception:
+        return None
+
+
 def swing_scan(c, tickers=None, workers=4, also_market=False):
     """
     Daily-chart swing setups inside uptrends (price above the 200 EMA, 20 EMA above 200 EMA):
@@ -1289,6 +1307,10 @@ def swing_scan(c, tickers=None, workers=4, also_market=False):
     names = dict(universe)
     stats["universe"] = len(universe)
     last_bar = None
+    LAST_DAILY.clear()
+    import quality as ql
+    spy = spy_daily_close()
+    stats["spy_ok"] = spy is not None
 
     rows = []
     for sym, d in _daily_frames([u[0] for u in universe]):
@@ -1321,6 +1343,8 @@ def swing_scan(c, tickers=None, workers=4, also_market=False):
         stop = float(r.Close - c.stop_atr_mult * atr)
         risk = float(r.Close - stop)
         past = setup_history(df, flags, found, c)
+        feat = ql.feature_series(df, flags, spy, c.stop_atr_mult, c.reward_risk).iloc[-1]
+        qscore, qparts, qraw = ql.score_row(feat, past["avg_r"], past["trades"])
         row = {"Symbol": sym, "Name": names.get(sym, ""), "Price": round(float(r.Close), 2),
                "Setup": ", ".join(SETUP_LABELS[x] for x in found),
                "RSI": round(float(r.RSI), 0), "ATR %": round(float(f["atr_pct"]), 1),
@@ -1329,7 +1353,10 @@ def swing_scan(c, tickers=None, workers=4, also_market=False):
                "Target": round(float(r.Close + c.reward_risk * risk), 2),
                "15d range +/-%": round(rng, 1) if rng is not None else None,
                "Past setups": past["trades"],
-               "Past hit target %": past["target_pct"], "Past avg R": past["avg_r"]}
+               "Past hit target %": past["target_pct"], "Past avg R": past["avg_r"],
+               "Score": qscore, "Room x": round(float(feat["room"]), 2) if feat["room"] == feat["room"] else None,
+               "vs SPY 3mo %": round(float(feat["rs"]) * 100, 1) if feat["rs"] == feat["rs"] else None,
+               "_score_why": ql.explain(qparts, qraw)}
         if c.risk_dollars > 0 and risk > 0:
             row["Shares"] = int(c.risk_dollars // risk)
         rows.append(row)
@@ -1349,12 +1376,13 @@ def swing_scan(c, tickers=None, workers=4, also_market=False):
     stats["no_data"] = stats["universe"] - stats["loaded"]
     stats["last_bar"] = pd.Timestamp(last_bar).strftime("%b %d") if last_bar is not None else ""
     cols = ["Symbol", "Name", "Price", "Setup", "RSI", "ATR %", "Day Vol x", "Stop", "Risk %", "Target",
-            "15d range +/-%", "Past setups", "Past hit target %", "Past avg R"]
+            "15d range +/-%", "Past setups", "Past hit target %", "Past avg R", "Score", "Room x", "vs SPY 3mo %",
+            "_score_why"]
     if c.risk_dollars > 0:
         cols.append("Shares")
     df = pd.DataFrame(rows, columns=cols)
     if not df.empty:
-        df = df.sort_values("Day Vol x", ascending=False).reset_index(drop=True)
+        df = df.sort_values(["Score", "Day Vol x"], ascending=False, na_position="last").reset_index(drop=True)
     return df, stats
 
 
