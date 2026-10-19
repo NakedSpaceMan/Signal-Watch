@@ -141,6 +141,7 @@ def run():
                                 "hold in stocks and coins.")
     if abs(acct - shared_acct) > 1e-9:
         sh.save_account(acct)
+    buying_slot = sb.empty()          # filled in below, once we know what is held
     risk_pct = sb.number_input("Max loss per trade (% of account)", min_value=0.1, max_value=10.0, step=0.1,
                                value=float(saved.get("risk_pct", 1.0)),
                                help="If a stop is hit, you lose about this share of your crypto account.")
@@ -189,13 +190,12 @@ def run():
     invested = psum["market_value"]
     s_mv0, s_n0 = sh.stock_held(cached_prices)
     free = max(acct - invested - s_mv0 - s_reserve, 0.0)
-    sb.markdown("**Where your money is**")
-    sb.caption(esc(f"Total account: {money(acct)}  \nIn stocks: {money(s_mv0)} ({s_n0})  \nIn coins: {money(invested)}"
-                   + (f"  \nKept uninvested: {money(s_reserve)}" if s_reserve > 0 else "")
-                   + f"  \n**Free cash: {money(free)}**"))
-    if s_mv0 > 0 and free == 0:
-        sb.warning("Your stocks already use up the whole account value. If your number is only the cash you have left, add what your "
-                   "stocks are worth to get the total.")
+    parts = [f"Total account: {money(acct)}", f"In stocks: {money(s_mv0)} ({s_n0} position{'s' if s_n0 != 1 else ''})",
+             f"In coins: {money(invested)}"]
+    if s_reserve > 0:
+        parts.append(f"Kept uninvested (stocks setting): {money(s_reserve)}")
+    parts.append(f"Left to spend: {money(free)}")
+    buying_slot.metric("Buying power (free cash)", money(free), help=esc("Where the rest of your money is right now:\n\n" + "\n\n".join(parts)))
 
     t_scan, t_chart, t_port, t_bt, t_learn, t_guide = st.tabs(
         ["Scanner", "Chart", "Portfolio", "Backtest", "Learn", "Guide"])
