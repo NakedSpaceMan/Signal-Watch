@@ -186,7 +186,7 @@ def run():
     with t_scan:
         scanner_tab(acct, risk_dollars, max_pos, int(max_new), stop_mult, rr, w, invested, cost, ww)
     with t_chart:
-        chart_tab(stop_mult, rr, valued)
+        chart_tab(stop_mult, rr, valued, ww)
     with t_port:
         portfolio_tab(store, tx, pos, valued, psum, acct, px)
     with t_bt:
@@ -327,14 +327,22 @@ def scanner_tab(acct, risk_dollars, max_pos, max_new, stop_mult, rr, weather, in
 
 
 # ------------------------------------------------------------------ chart
-def chart_tab(stop_mult, rr, valued):
+def chart_tab(stop_mult, rr, valued, ww=False):
     st.subheader("Coin chart (daily)")
     coin_default = "BTC"
     c1, c2 = st.columns([1, 2])
     coin = c1.text_input("Coin (ticker like BTC, or a Yahoo symbol)", value=coin_default, key="cx_coin_in").strip().upper()
     ranges = {"1 month": 30, "3 months": 90, "6 months": 180, "1 year": 365, "2 years": 730}
-    pick = c2.radio("Time range (each candle is one day)", list(ranges), index=1, horizontal=True, key="cx_range")
-    show_cone = st.checkbox("Show the likely range for the next 15 days (shaded)", value=True, key="cx_cone")
+    WEEK = "This week (Mon-Sun)"
+    if ww:
+        ranges = {WEEK: 7, **ranges}
+        pick = c2.radio("Time range (each candle is one day)", list(ranges), index=0, horizontal=True, key="cx_range_ww",
+                        help="Weekend Warrior is on, so the chart starts on the week from Monday to Sunday. Pick another range to zoom out.")
+    else:
+        pick = c2.radio("Time range (each candle is one day)", list(ranges), index=1, horizontal=True, key="cx_range")
+    week_view = ww and pick == WEEK
+    show_cone = st.checkbox("Show the likely range through Sunday (shaded)" if week_view else "Show the likely range for the next 15 days (shaded)",
+                            value=True, key="cx_cone")
     if not coin:
         return
     frames, names, no_data = cached_frames((coin, "BTC"), "2y")
@@ -356,17 +364,25 @@ def chart_tab(stop_mult, rr, valued):
     crit = cr.criteria(stop_atr_mult=stop_mult, reward_risk=rr, max_atr_pct=100.0, min_avg_volume=0)
     flags = sc.swing_setup_flags(df, crit)
     cone = None
-    if show_cone:
+    mon = None
+    n = ranges[pick]
+    if week_view:
+        last = pd.Timestamp(df.index[-1])
+        mon = last.normalize() - pd.Timedelta(days=last.weekday())
+        n = max(int((pd.DatetimeIndex(df.index) >= mon).sum()), 1)
+        days_left = 6 - last.weekday()
+    if show_cone and not (week_view and days_left <= 0):
         try:
-            cone = fc.range_cone(df, every_day=True)
+            cone = fc.range_cone(df, horizon=days_left, every_day=True) if week_view else fc.range_cone(df, every_day=True)
         except Exception:
             cone = None
-    n = ranges[pick]
     fig = swc.build_swing_chart(df.tail(n), flags.tail(n), crit, f"{sym} - swing setups (daily)",
                                 setups=("pullback", "breakout", "bounce"), opts={"volume": True, "sr": True, "beginner": True,
                                                                                     "always_open": True},
                                 overlay=None, show_outcomes=True, cone=cone)
-    fig.update_layout(uirevision=f"{sym}-crypto")
+    fig.update_layout(uirevision=f"{sym}-crypto-{'week' if week_view else 'std'}")
+    if week_view:
+        fig.update_xaxes(range=[mon - pd.Timedelta(hours=12), mon + pd.Timedelta(days=6, hours=12)])
     try:
         st.plotly_chart(fig, width="stretch", key="cx_chart")
     except TypeError:
@@ -379,7 +395,7 @@ def chart_tab(stop_mult, rr, valued):
     if cone:
         lo, hi = cone["end68"]
         lo2, hi2 = cone["end95"]
-        st.markdown(esc(f"**Likely range by {cone['dates'][-1]:%b %d}** (15 days): **${lo / scale:,.6g} to ${hi / scale:,.6g}** about 2 times "
+        st.markdown(esc(f"**Likely range by {cone['dates'][-1]:%b %d}** ({cone['horizon']} days): **${lo / scale:,.6g} to ${hi / scale:,.6g}** about 2 times "
                         f"out of 3, and **${lo2 / scale:,.6g} to ${hi2 / scale:,.6g}** almost always. It does not predict direction."))
     st.subheader("Current read")
     st.code("\n".join(swc.current_swing_read(df, flags, crit, plain=True)), language=None)
