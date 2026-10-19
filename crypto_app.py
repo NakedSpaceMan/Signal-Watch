@@ -134,9 +134,9 @@ def run():
     sb.caption("Your crypto trades and settings are kept separately from your stocks.")
     sb.header("Account & risk")
     shared_acct, s_reserve = sh.stock_account()
-    acct = sb.number_input("Account value ($, shared with stocks)", min_value=0.0, step=10.0,
+    acct = sb.number_input("Total account value ($, shared with stocks)", min_value=0.0, step=10.0,
                            value=float(shared_acct if shared_acct > 0 else saved.get("acct", 100.0)), key="cx_acct",
-                           help="Your whole Robinhood account: cash plus stocks plus coins. Stocks and crypto share this one pool of money, "
+                           help="Your whole Robinhood account: cash PLUS the stocks and coins you hold (not just the cash left over). Stocks and crypto share this one pool of money, "
                                 "so changing it here changes it on the stocks side too. Cash for a crypto plan is this, minus what you "
                                 "hold in stocks and coins.")
     if abs(acct - shared_acct) > 1e-9:
@@ -187,6 +187,15 @@ def run():
     valued = lg.value_positions(pos["open"], px, acct)
     psum = lg.portfolio_summary(valued, pos["closed"], pos["realized"], acct, 0.0)
     invested = psum["market_value"]
+    s_mv0, s_n0 = sh.stock_held(cached_prices)
+    free = max(acct - invested - s_mv0 - s_reserve, 0.0)
+    sb.markdown("**Where your money is**")
+    sb.caption(esc(f"Total account: {money(acct)}  \nIn stocks: {money(s_mv0)} ({s_n0})  \nIn coins: {money(invested)}"
+                   + (f"  \nKept uninvested: {money(s_reserve)}" if s_reserve > 0 else "")
+                   + f"  \n**Free cash: {money(free)}**"))
+    if s_mv0 > 0 and free == 0:
+        sb.warning("Your stocks already use up the whole account value. If your number is only the cash you have left, add what your "
+                   "stocks are worth to get the total.")
 
     t_scan, t_chart, t_port, t_bt, t_learn, t_guide = st.tabs(
         ["Scanner", "Chart", "Portfolio", "Backtest", "Learn", "Guide"])
