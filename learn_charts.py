@@ -506,8 +506,35 @@ def _rsi(close, n=14):
     return 100 - 100 / (1 + up / dn.replace(0, np.nan))
 
 
+def chart_cone(chart):
+    """The likely-range cone for the next MAX_HOLD days, from the visible half only (no peeking at the future)."""
+    import forecast as fc
+    return fc.range_cone(chart["hist"], horizon=MAX_HOLD, min_history=40, dates=False)
+
+
+def _add_cone(fig, cone, h):
+    import plotly.graph_objects as go
+
+    xs = [h - 1] + list(range(h, h + len(cone["lo68"])))
+    p0 = cone["price"]
+    tips = [""] + [f"<b>Day {t + 1} from the decision point</b><br>Usually (about 2 in 3): {cone['lo68'][t]:,.2f} to {cone['hi68'][t]:,.2f}"
+                   f"<br>Almost always (about 19 in 20): {cone['lo95'][t]:,.2f} to {cone['hi95'][t]:,.2f}"
+                   "<br><i>A range of what is normal, not a prediction.</i>" for t in range(len(cone["lo68"]))]
+    line_c = "rgba(41,182,246,0.55)"
+    for name, hi, lo, fc_, w in (("Wider range (about 19 in 20)", cone["hi95"], cone["lo95"], "rgba(41,182,246,0.10)", 0.6),
+                                 ("Likely range (about 2 in 3)", cone["hi68"], cone["lo68"], "rgba(41,182,246,0.22)", 1.0)):
+        fig.add_trace(go.Scatter(x=xs, y=[p0] + [float(v) for v in hi], mode="lines", name=name, legendgroup=name,
+                                 line=dict(width=w, color=line_c), hovertext=tips, hoverinfo="text"), row=1, col=1)
+        fig.add_trace(go.Scatter(x=xs, y=[p0] + [float(v) for v in lo], mode="lines", legendgroup=name, showlegend=False,
+                                 line=dict(width=w, color=line_c), fill="tonexty", fillcolor=fc_,
+                                 hovertext=tips, hoverinfo="text"), row=1, col=1)
+    for val, anchor in ((cone["hi68"][-1], "bottom"), (cone["lo68"][-1], "top")):
+        fig.add_annotation(x=xs[-1], y=float(val), text=f"{val:,.2f}", showarrow=False, xanchor="left", yanchor=anchor,
+                           font=dict(size=11, color="#81d4fa"), row=1, col=1)
+
+
 def build_figure(chart, markup=True, reveal=False, user_plan=None, quiz_lines=None, basics=False, show_plan=None,
-                 height=640):
+                 height=640, cone=None):
     """
     markup      draw levels, trend lines, numbered points (from the pattern) and the plan lines
     reveal      show the second half (what happened next) and the exit
@@ -578,6 +605,8 @@ def build_figure(chart, markup=True, reveal=False, user_plan=None, quiz_lines=No
                 textfont=dict(size=12, color="#ffffff"), name="Exit",
                 marker=dict(symbol="x", size=15, color="#ffffff", line=dict(width=2, color="#ffffff")),
                 hoverinfo="skip"), row=1, col=1)
+    if cone:
+        _add_cone(fig, cone, h)
     for lab, y in (quiz_lines or []):
         hline(y, f"{lab}", "#ce93d8", "dash", h - 8, h + 8)
         fig.add_annotation(x=h + 8.4, y=y, text=f"<b>{lab}</b>", showarrow=False, xanchor="left",
@@ -592,7 +621,18 @@ def build_figure(chart, markup=True, reveal=False, user_plan=None, quiz_lines=No
                       legend=dict(orientation="h", y=1.05), margin=dict(l=10, r=10, t=30, b=10),
                       xaxis3=dict(title=dict(text="Trading days (each candle is one day)")))
     fig.update_xaxes(range=[-1, xmax + 2])
-    fig.update_yaxes(title_text="Price", row=1, col=1)
+    # Fix the price range so nothing gets cut off at the top or bottom: include the candles, the cone, the plan lines
+    # and any quiz lines, with a little padding.
+    lows, highs = [float(full.Low.min())], [float(full.High.max())]
+    if cone:
+        lows.append(float(cone["lo95"].min())); highs.append(float(cone["hi95"].max()))
+    if plan:
+        lows.append(float(min(plan["stop"], plan["entry"]))); highs.append(float(max(plan["target"], plan["entry"])))
+    for _, y in (quiz_lines or []):
+        lows.append(float(y)); highs.append(float(y))
+    lo_y, hi_y = min(lows), max(highs)
+    pad = (hi_y - lo_y) * 0.05
+    fig.update_yaxes(title_text="Price", range=[lo_y - pad, hi_y + pad], row=1, col=1)
     fig.update_yaxes(title_text="Volume", row=2, col=1)
     fig.update_yaxes(title_text="RSI", row=3, col=1)
     return fig

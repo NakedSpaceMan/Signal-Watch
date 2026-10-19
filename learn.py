@@ -250,6 +250,31 @@ def _result_line(out, r_dollars=None):
     return txt
 
 
+CONE_HELP = ("The shaded cone shows how far this stock usually wanders over the next 15 trading days, based on how much it "
+             "has been moving. The darker band is the usual range (about 2 times out of 3); the lighter band is almost everything "
+             "(about 19 times out of 20). It says nothing about direction, so it is a map of what is normal, not a prediction.")
+
+
+def _show_cone(key):
+    """The 'show the cone' checkbox shared by lessons and the quiz; on by default."""
+    return bool(st.session_state.get(key, True))
+
+
+def _cone_note(cone, stop=None, target=None):
+    """Where a stop or target sits relative to the 15-day cone, in plain English."""
+    bits = []
+    if target is not None:
+        hi68, hi95 = cone["hi68"][-1], cone["hi95"][-1]
+        bits.append("your target is " + ("inside the usual range, so it is within normal movement" if target <= hi68 else
+                                         "inside the wider range but outside the usual one, so it is possible but not typical"
+                                         if target <= hi95 else "beyond even the wider range, so it would take an unusual move"))
+    if stop is not None:
+        lo68, lo95 = cone["lo68"][-1], cone["lo95"][-1]
+        bits.append("your stop is " + ("inside the usual range, so ordinary wiggles could hit it" if stop >= lo68 else
+                                       "outside the usual range, so it takes a bigger-than-normal drop to hit it"))
+    return ("Against the range cone: " + "; ".join(bits) + ".") if bits else ""
+
+
 # ------------------------------------------------------------------ lessons
 def _lesson_view(key, risk_dollars):
     L = LESSONS[key]
@@ -260,19 +285,25 @@ def _lesson_view(key, risk_dollars):
     st.caption(L["tagline"])
     st.markdown(L["idea"])
 
-    c1, c2 = st.columns([1, 2])
+    c1, c2, c3 = st.columns([1, 1.3, 1.7])
     c1.button("New example chart", key=f"lrn_new_{key}", on_click=_new_seed, args=(sk, (rk,)))
     reveal = c2.checkbox("Show what happened next", key=rk)
+    show_cone = c3.checkbox("Show the likely range cone", value=True, key="lrn_cone", help=CONE_HELP)
     chart = lc.make_chart(L["kind"], ss[sk])
     basics = key == "basics"
-    _plot(lc.build_figure(chart, markup=True, reveal=reveal, basics=basics, show_plan=L["trade"] is not None),
+    cone = lc.chart_cone(chart) if show_cone else None
+    _plot(lc.build_figure(chart, markup=True, reveal=reveal, basics=basics, show_plan=L["trade"] is not None, cone=cone),
           f"lrn_fig_{key}")
-    st.caption("Practice chart made up by the app (not a real stock). The dotted vertical line is the moment you would decide.")
+    st.caption("Practice chart made up by the app (not a real stock). The dotted vertical line is the moment you would decide."
+               + (" The blue cone is the likely range for the next 15 days (not a prediction)." if cone else ""))
 
     notes = lc.basics_notes(chart)[1] if basics else chart["g"]["notes"]
     st.markdown("**What to notice**")
     for n in notes:
         st.markdown("- " + _md(n))
+    if cone and L["trade"]:
+        pl = chart["plan"]
+        st.markdown("- " + _md(_cone_note(cone, pl["stop"], pl["target"]).replace("your", "the plan's")))
     if reveal and L["trade"]:
         out = chart["outcome"]
         st.markdown(_md(_result_line(out, risk_dollars)))
@@ -312,7 +343,9 @@ def _quiz(key, L):
         has_stop = key != "basics" and L["kind"] in STOP_QUIZ_KINDS
         if has_stop:
             lines, answer, why = lc.quiz_stop_options(chart, qseed)
-        _plot(lc.build_figure(chart, markup=False, reveal=False, quiz_lines=lines, show_plan=False), f"lrn_qfig_{key}_{qseed}")
+        qcone = lc.chart_cone(chart) if _show_cone("lrn_cone") else None
+        _plot(lc.build_figure(chart, markup=False, reveal=False, quiz_lines=lines, show_plan=False, cone=qcone),
+              f"lrn_qfig_{key}_{qseed}")
         with st.form(f"lrn_form_{key}_{qseed}"):
             picks = []
             if has_stop:
@@ -347,7 +380,8 @@ def _quiz(key, L):
                     st.error(f"{q['q']}  Not quite. Answer: {q['options'][q['answer']]}. {q['why']}")
             st.markdown(f"**Score: {score} of {total}.**")
             st.caption("Here is the same chart with everything marked up and the result revealed:")
-            _plot(lc.build_figure(chart, markup=True, reveal=True, basics=False, show_plan=True), f"lrn_qans_{key}_{qseed}")
+            _plot(lc.build_figure(chart, markup=True, reveal=True, basics=False, show_plan=True, cone=qcone),
+                  f"lrn_qans_{key}_{qseed}")
         st.button("New quiz chart", key=f"lrn_qnew_{key}", on_click=_new_seed, args=(qk,))
 
 
@@ -508,8 +542,10 @@ def _practice_view(risk_dollars):
 
     played = ss.get("lrn_pplayed") == seed
     res = ss.get("lrn_pres") if played else None
+    show_cone = st.checkbox("Show the likely range cone (next 15 trading days)", value=True, key="lrn_pcone", help=CONE_HELP)
+    cone = lc.chart_cone(chart) if show_cone else None
     if not played:
-        _plot(lc.build_figure(chart, markup=False, reveal=False, show_plan=False), f"lrn_pfig_{seed}")
+        _plot(lc.build_figure(chart, markup=False, reveal=False, show_plan=False, cone=cone), f"lrn_pfig_{seed}")
         last = float(chart["hist"].Close.iloc[-1])
         buy_first = st.radio("Your call", ["Buy at the next open", "Skip this one"], key=f"lrn_pa_{seed}", horizontal=True)
         buying = buy_first.startswith("Buy")
@@ -536,7 +572,8 @@ def _practice_view(risk_dollars):
                     f"({reward / last * 100:.1f}%). Your reward is {rr:.1f} times your risk, so you would need to win about "
                     f"{100 / (1 + rr):.0f}% of trades like this to break even."
                     + (f" If you risked ${risk_dollars:,.2f}, a full win would be about ${risk_dollars * rr:,.2f}."
-                       if risk_dollars else "")))
+                       if risk_dollars else "")
+                    + ((" " + _cone_note(cone, stop_v, tgt_v)) if cone else "")))
                 if rr < 1:
                     st.warning("Your target is closer than your stop. You would need to win more than half your trades just to break even.")
             st.caption("Type a price, then press Enter.")
@@ -558,7 +595,8 @@ def _practice_view(risk_dollars):
     # ---- result
     p = chart["plan"]
     if res["action"].startswith("Buy"):
-        _plot(lc.build_figure(chart, markup=False, reveal=True, user_plan=res["plan"], show_plan=False), f"lrn_pres_{seed}")
+        _plot(lc.build_figure(chart, markup=False, reveal=True, user_plan=res["plan"], show_plan=False, cone=cone),
+              f"lrn_pres_{seed}")
         pl = res["plan"]
         st.markdown(_md(_result_line(res["out"], risk_dollars)))
         st.caption(_md(f"Your plan: buy about ${pl['entry']:,.2f}, stop ${pl['stop']:,.2f}, target ${pl['target']:,.2f} "
@@ -566,7 +604,7 @@ def _practice_view(risk_dollars):
         for line in _explain(chart, res):
             st.markdown("- " + _md(line))
     else:
-        _plot(lc.build_figure(chart, markup=False, reveal=True, show_plan=False), f"lrn_pres_{seed}")
+        _plot(lc.build_figure(chart, markup=False, reveal=True, show_plan=False, cone=cone), f"lrn_pres_{seed}")
         st.markdown("**You skipped.**")
     tb = lc.simulate_plan(chart["fut"], p["entry"], p["stop"], p["target"])
     if kind == "none":
@@ -589,7 +627,7 @@ def _practice_view(risk_dollars):
             st.caption("Skipping a real setup is fine. You can't take every one. Judge a decision by whether the setup was "
                        "valid, not by one outcome.")
     with st.expander("See this chart marked up"):
-        _plot(lc.build_figure(chart, markup=True, reveal=True, show_plan=True), f"lrn_pmark_{seed}")
+        _plot(lc.build_figure(chart, markup=True, reveal=True, show_plan=True, cone=cone), f"lrn_pmark_{seed}")
         for n in chart["g"]["notes"]:
             st.markdown("- " + _md(n))
     st.button("Next chart", key=f"lrn_next_{seed}", on_click=_next_practice, type="primary")

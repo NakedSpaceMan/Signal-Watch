@@ -91,7 +91,7 @@ def future_days(last_ts, n):
     return pd.DatetimeIndex(days)
 
 
-def range_cone(df, horizon=HORIZON):
+def range_cone(df, horizon=HORIZON, min_history=MIN_HISTORY, dates=True):
     """
     The likely-range cone for the next `horizon` trading days.
     Returns a dict, or None when there isn't enough history:
@@ -99,7 +99,7 @@ def range_cone(df, horizon=HORIZON):
       samples, end68/end95 as (low, high) at the end of the window, pct68/pct95 as +/- % at the end.
     """
     close = df["Close"].astype(float)
-    if len(close) < MIN_HISTORY:
+    if len(close) < min_history:
         return None
     s = daily_sigma(close)
     if s is None:
@@ -109,7 +109,7 @@ def range_cone(df, horizon=HORIZON):
     t = np.arange(1, horizon + 1)
     spread = s * np.sqrt(t)
     out = {
-        "dates": future_days(df.index[-1], horizon), "price": price, "sigma": s, "horizon": horizon,
+        "dates": future_days(df.index[-1], horizon) if dates else None, "price": price, "sigma": s, "horizon": horizon,
         "k_in": k_in, "k_out": k_out, "samples": n,
         "mid": np.full(horizon, price),
         "lo68": price * np.exp(-k_in * spread), "hi68": price * np.exp(k_in * spread),
