@@ -88,9 +88,6 @@ SIDEBAR = [
          "How many new stocks the scanner's combined plan may suggest at once."),
         ("Most open positions at once (0 = no cap)",
          "The most stocks you want to hold at the same time. When you are full, the scanner says there is no free slot."),
-        ("Allow fractional shares",
-         "Tick this if Robinhood lets you buy part of a share (for example 0.5 shares). Note that the stop / "
-         "target pair order at Robinhood only works on whole shares."),
     ]),
     ("Trade levels", [
         ("Stop = ATRs below price",

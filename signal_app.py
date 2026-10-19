@@ -113,7 +113,7 @@ max_new = st.sidebar.number_input("Most new positions per scan plan", min_value=
                                   value=int(_saved.get("max_new", 3)))
 max_open = st.sidebar.number_input("Most open positions at once (0 = no cap)", min_value=0, max_value=20,
                                    value=int(_saved.get("max_open", 2)))
-fractional = st.sidebar.checkbox("Allow fractional shares", value=bool(_saved.get("fractional", False)))
+fractional = False   # Robinhood stop-loss orders need whole shares, so plans use whole shares only
 
 st.sidebar.header("Trade levels")
 stop_mult = st.sidebar.number_input("Stop = ATRs below price", min_value=0.5, max_value=6.0, step=0.5,
@@ -126,7 +126,7 @@ if st.sidebar.button("Save these settings"):
         SETTINGS_FILE.write_text(json.dumps({**_saved, "practice": practice,
             acct_key: acct_value, "cash_reserve": cash_reserve, "risk_pct": risk_pct,
             "daily_risk": risk_budget, "extra_risk": extra_risk, "max_pos_pct": max_pos_pct,
-            "max_new": int(max_new), "max_open": int(max_open), "fractional": fractional,
+            "max_new": int(max_new), "max_open": int(max_open),
             "stop_mult": stop_mult, "reward_risk": reward_risk, "beginner": beginner}))
         st.sidebar.success("Saved on this computer.")
     except Exception as e:
@@ -604,7 +604,7 @@ def show_plan(plan, info, acct):
     if plan.empty:
         st.info("Nothing fits your limits right now. Common reasons: the budget is used up by positions you own, "
                 "shares cost too much for the position cap, or stops are too wide for the per-trade risk. "
-                "Fractional shares or a wider budget would change that, but I would not loosen limits just to see picks.")
+                "Plans use whole shares only, because Robinhood stop orders need them. I would not loosen limits just to see picks.")
         return
     cols = [c for c in ["Symbol", "Price", "Shares", "Cost $", "Stop", "Target", "Risk $",
                         "Setup", "Score", "Why ranked", "Past setups", "Past hit target %", "Past avg R",
