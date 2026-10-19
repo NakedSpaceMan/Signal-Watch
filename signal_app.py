@@ -618,6 +618,44 @@ def show_plan(plan, info, acct):
 
 
 @st.fragment(run_every=scan_minutes * 60 if scan_auto else None)
+def add_to_portfolio_ui(df, plan, preset, acct, info):
+    """One click to record a scanner pick as a BUY in the Portfolio (it only records; it does not place an order)."""
+    st.markdown("#### Add a pick to your Portfolio")
+    st.caption("After you buy a stock in Robinhood, record it here in one click. This only adds it to your Portfolio tab "
+               "(with the scan's stop and target); it does not place any order. Change the shares or price if your fill was different.")
+    plan_shares = {r["Symbol"]: int(r["Shares"]) for _, r in plan.iterrows()} if plan is not None and len(plan) else {}
+    syms = df["Symbol"].tolist()
+    first = next((x for x in syms if x in plan_shares), syms[0])
+    sym = st.selectbox("Stock you bought", syms, index=syms.index(first), key="add_sym")
+    row = df[df["Symbol"] == sym].iloc[0]
+    sized = plan_shares.get(sym)
+    if sized is None:
+        mx = row.get("Max shares")
+        sized = int(mx) if mx is not None and not pd.isna(mx) else 0
+    px = float(row["Price"])
+    stop = None if "Stop" not in row or pd.isna(row["Stop"]) else float(row["Stop"])
+    target = None if "Target" not in row or pd.isna(row["Target"]) else float(row["Target"])
+    b1, b2, b3 = st.columns([1, 1, 2])
+    qty = b1.number_input("Shares", min_value=0, step=1, value=int(sized), key=f"add_qty_{sym}",
+                          help="Starts at the size in the combined plan (or the biggest position that fits your limits). Whole shares only, because Robinhood stop orders need them.")
+    fill = b2.number_input("Price paid ($)", min_value=0.0, step=0.01, value=round(px, 2), format="%.2f", key=f"add_px_{sym}",
+                           help="The scan's price. Change it to what you actually paid.")
+    b3.markdown(f"Stop **{'none' if stop is None else f'${stop:,.2f}'}**  ·  Target **{'none' if target is None else f'${target:,.2f}'}**")
+    if sym in set(acct.held_symbols):
+        st.warning(f"You already hold {sym}. This will add to that position.")
+    if st.button(f"Add {sym} to my Portfolio as bought", key="add_to_portfolio", disabled=qty <= 0 or fill <= 0):
+        try:
+            store.add_transaction(sym, "BUY", float(qty), float(fill), ts=datetime.now(),
+                                  strategy={"Swing": "swing", "Steady": "steady", "Momentum": "momentum"}.get(PRESET_SHORT[preset], "other"),
+                                  stop=stop, target=target, notes="Added from the scanner")
+            st.session_state["_added_msg"] = f"Added {int(qty)} {sym} at ${fill:,.2f} to your Portfolio."
+            st.rerun()
+        except ValueError as e:
+            st.error(str(e))
+    if st.session_state.get("_added_msg"):
+        st.success(st.session_state.pop("_added_msg"))
+
+
 def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, acct, hide_nofit, sort_by,
                  hide_stretch=False, weather_gate=False):
     due = scan_auto and (time.time() - st.session_state.get("scan_ts", 0) >= scan_minutes * 60 - 2)
@@ -709,6 +747,7 @@ def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, 
         st.caption("'Max shares / cost / risk' is the biggest position you could take in that ONE stock. "
                    "You cannot take them all at once. The combined plan below spends your shared budget in rank order.")
         show_plan(plan, info, acct)
+    add_to_portfolio_ui(df, plan, preset, acct, info)
     pick = st.selectbox("Details / open in chart", df["Symbol"].tolist(), key="scan_pick")
     st.button("Load chart", key="load_chart", on_click=_open_in_chart)
     if st.session_state.pop("_goto_chart", False):
