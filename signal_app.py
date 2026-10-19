@@ -1124,6 +1124,62 @@ GLOSSARY = [
 ]
 
 
+def mark_weekends(fig, index):
+    """Dotted vertical line (labelled Weekend) wherever the chart skips over a Saturday and Sunday."""
+    try:
+        idx = pd.DatetimeIndex(index)
+        if idx.tz is not None:
+            idx = idx.tz_localize(None)
+        for a, b in zip(idx[:-1], idx[1:]):
+            if a.weekday() <= 4 and (b.normalize() - a.normalize()).days >= 1 and b.weekday() < a.weekday():
+                at = (a.normalize() + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                fig.add_vline(x=at, row="all", col=1, line_dash="dot", line_color="rgba(255,255,255,0.55)", line_width=1.5)
+                fig.add_annotation(x=at, y=1.0, yref="paper", text="Weekend", showarrow=False, yanchor="bottom",
+                                   font=dict(size=11, color="rgba(255,255,255,0.8)"))
+    except Exception:
+        pass
+
+
+def show_day_chart(sym, overlay, with_volume=True):
+    """Today's session in 5-minute candles (a one-day view of daily candles would be a single bar)."""
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    try:
+        d5 = fetch(sym, "5d", "5m")
+    except Exception as e:
+        st.error(f"Couldn't load today's 5-minute bars for {sym}: {e}")
+        return
+    days = pd.DatetimeIndex(d5.index).normalize()
+    day = d5[days == days[-1]]
+    if len(day) < 3:
+        st.info("Not enough 5-minute bars yet for today. If the market just opened, check back in a few minutes.")
+        return
+    x = cu.plot_x(day.index)
+    tp = (day.High + day.Low + day.Close) / 3
+    vwap = (tp * day.Volume).cumsum() / day.Volume.replace(0, float("nan")).cumsum()
+    rows = 2 if with_volume else 1
+    fig = make_subplots(rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.03,
+                        row_heights=[0.75, 0.25] if with_volume else [1.0])
+    fig.add_trace(go.Candlestick(x=x, open=day.Open, high=day.High, low=day.Low, close=day.Close, name="Price",
+                                 increasing_line_color="#26a69a", decreasing_line_color="#ef5350"), row=1, col=1)
+    fig.add_trace(go.Scatter(x=x, y=vwap, name="VWAP (average price paid today)", line=dict(width=1.3, color="#ffee58")), row=1, col=1)
+    cu.add_position_overlay(fig, overlay, x, daily=False, row=1)
+    if with_volume:
+        vcol = ["#26a69a" if c >= o else "#ef5350" for c, o in zip(day.Close, day.Open)]
+        fig.add_trace(go.Bar(x=x, y=day.Volume, name="Volume", marker_color=vcol), row=2, col=1)
+        fig.update_yaxes(title_text="Volume", row=2, col=1)
+    fig.update_layout(template="plotly_dark", height=620, xaxis_rangeslider_visible=False, hovermode="x unified",
+                      title=f"{sym} - today ({days[-1]:%a %b %d}, 5-minute candles)", legend=dict(orientation="h", y=1.06),
+                      uirevision=f"{sym}-day")
+    fig.update_xaxes(rangebreaks=cu.time_rangebreaks(day.index))
+    fig.update_yaxes(title_text="Price", row=1, col=1)
+    chg = (day.Close.iloc[-1] / day.Open.iloc[0] - 1) * 100
+    st.caption(f"Today so far: open {day.Open.iloc[0]:,.2f}, high {day.High.max():,.2f}, low {day.Low.min():,.2f}, "
+               f"last {day.Close.iloc[-1]:,.2f} ({chg:+.1f}% from the open). Yahoo data can be delayed, and the newest candle is still forming.")
+    show_chart(fig, "day_chart")
+
+
 def show_glossary():
     with st.expander("What do these words mean? (beginner glossary)"):
         for term, text in GLOSSARY:
@@ -1139,6 +1195,7 @@ def chart_view(mode):
     delta = so.interval_to_timedelta(bar)
     try:
         raw = fetch(ticker, "3y" if swing_mode else so.default_period(bar), bar)
+        raw_live = raw                      # includes today's candle while it is still forming
         raw = so.drop_unfinished_bar(raw, delta)
         if len(raw) < so.MIN_BARS:
             st.error(f"Only {len(raw)} finished bars available; need about {so.MIN_BARS} "
@@ -1173,9 +1230,18 @@ def chart_view(mode):
         rng_pick = st.radio("Time range (each candle is one trading day)", list(ranges), index=list(ranges).index("3 months"),
                             horizontal=True, key="swing_range")
         n = ranges[rng_pick]
-        if n <= 5:
-            st.caption(f"{'One candle' if n == 1 else 'Five candles'} is all a {rng_pick} view of daily data can show. "
-                       "For price action inside a single day, switch to Intraday signals in the sidebar.")
+        if rng_pick == "1 day":
+            show_day_chart(ticker, build_overlay(ticker, valued, tx_all), opt_volume)
+            return
+        week_view = rng_pick == "1 week"
+        if week_view:
+            df_live = so.add_indicators(raw_live)
+            flags_live = sc.swing_setup_flags(df_live, crit)
+            last_ts = pd.Timestamp(df_live.index[-1])
+            week_start = last_ts.normalize() - pd.Timedelta(days=last_ts.weekday() + 7)   # Monday of last week
+            n = max(int((pd.DatetimeIndex(df_live.index).tz_localize(None) >= week_start).sum()), 2) \
+                if pd.DatetimeIndex(df_live.index).tz is not None else \
+                max(int((pd.DatetimeIndex(df_live.index) >= week_start).sum()), 2)
         last = df.iloc[-1]
         atr = float(flags["atr"].iloc[-1])
         sugg = None
@@ -1186,10 +1252,11 @@ def chart_view(mode):
         cone = None
         if show_cone:
             try:
-                cone = fc.range_cone(df)
+                cone = fc.range_cone(df_live if week_view else df)
             except Exception:
                 cone = None
-        fig = swc.build_swing_chart(df.tail(n), flags.tail(n), crit, f"{ticker} - swing setups (daily)",
+        chart_df, chart_flags = (df_live, flags_live) if week_view else (df, flags)
+        fig = swc.build_swing_chart(chart_df.tail(n), chart_flags.tail(n), crit, f"{ticker} - swing setups (daily)",
                                     setups=tuple(s.lower() for s in shown), opts={"volume": opt_volume, "sr": opt_sr, "beginner": beginner},
                                     overlay=overlay, show_outcomes=outcomes, cone=cone,
                                     sr=cu.support_resistance(df.tail(max(n, 63))) if opt_sr else None)
@@ -1198,7 +1265,11 @@ def chart_view(mode):
         st.caption("Hover a marker to see why the scanner would have flagged that day, the levels it would have "
                    "suggested, and what price did next. Diamond = pullback, star = breakout, circle = bounce. "
                    "Your own entry, stop and target (from the Portfolio tab) are solid lines; suggested levels are dotted.")
-        fig.update_layout(uirevision=f"{ticker}-swing")
+        fig.update_layout(uirevision=f"{ticker}-swing-{rng_pick}")
+        if week_view:
+            mark_weekends(fig, chart_df.tail(n).index)
+            st.caption("This view shows last week and this week so far, including today's candle while it is still forming. "
+                       "Today's candle and its markers can still change until the close. The dotted line marks the weekend.")
         show_chart(fig, "swing_chart")
         if show_cone:
             show_range_box(ticker, df, cone, flags)
