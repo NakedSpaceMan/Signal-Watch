@@ -177,6 +177,12 @@ GLOSSARY = [
                                        "The darker band is the usual range (about 2 times out of 3); the lighter band is almost "
                                        "everything (about 19 times out of 20). It does NOT predict direction, and earnings or big "
                                        "news can break through it. Use it to judge whether a stop is too tight or a target is a long shot."),
+    ("Past setups / Past hit target % / Past avg R", "Scanner columns that replay the same kind of setup on that one stock's own "
+                                                   "history (next-day entry, the same stop and target as shown). 'Past setups' is "
+                                                   "how many times it happened. 'Hit target %' is how often price reached the "
+                                                   "target first. 'Avg R' above 0 means it paid off on average there. Few past "
+                                                   "setups means a small sample, so the other two are left blank under 3. It is "
+                                                   "a sanity check, not a promise."),
     ("Profit factor", "Total money won divided by total money lost. Above 1.0 means winners outweighed losers; 1.3 or more is decent."),
     ("Max drawdown", "The worst losing stretch: how far your running total fell from its best point. It shows how rough a bad "
                      "patch can feel, so you can plan for it."),

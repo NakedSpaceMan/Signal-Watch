@@ -655,7 +655,16 @@ def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, 
     show_table(df, column_config=col_help(df, {
         "15d range +/-%": "How far this stock usually moves in 15 trading days (about 2 times out of 3), up or down, "
                           "based on how much it has been moving lately. Compare it with the distance to the Target: "
-                          "a target much bigger than this range is a long shot. It says nothing about direction."}))
+                          "a target much bigger than this range is a long shot. It says nothing about direction.",
+        "Past setups": "How many times this same kind of setup showed up on this stock in the past (a finished trade "
+                       "each time: next-day entry, your stop and target). A small number means a small sample, so "
+                       "treat the next two columns with caution. Blank below 3.",
+        "Past hit target %": "Of those past setups on this stock, how often price reached the target before the stop "
+                             "or the time limit. With a 2-to-1 target, a bit over a third is break-even and "
+                             "more than that is profit. Timeouts count as not hitting it.",
+        "Past avg R": "Average result per past trade on this stock, in R (1R = what you risked). Above 0 means this "
+                      "setup made money on this stock on average after costs. Negative means it lost on average here, "
+                      "which is a reason to be pickier, not proof it will lose again."}))
     if info["enabled"]:
         st.caption("'Max shares / cost / risk' is the biggest position you could take in that ONE stock. "
                    "You cannot take them all at once. The combined plan below spends your shared budget in rank order.")

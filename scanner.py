@@ -1197,6 +1197,27 @@ def swing_setup_flags(df, c):
     })
 
 
+def setup_history(df, flags, found, c, min_trades=3):
+    """
+    How this same kind of setup (same stop and target rules) did on THIS stock in the past.
+    Replays every earlier day the same setup(s) appeared, enters at the next open, one trade at a time.
+    Returns {"trades", "target_pct", "avg_r"}; the last two are None when there are fewer than `min_trades`
+    finished trades (too small a sample to say anything).
+    """
+    import backtest as bt
+    out = {"trades": 0, "target_pct": None, "avg_r": None}
+    try:
+        p = bt.BTParams(setups=tuple(found), stop_atr_mult=c.stop_atr_mult, reward_risk=c.reward_risk)
+        trades = [t for t in bt.backtest_symbol(df, flags, p) if t["reason"] != "Still open"]
+    except Exception:
+        return out
+    out["trades"] = len(trades)
+    if len(trades) >= min_trades:
+        out["target_pct"] = round(100 * sum(t["reason"].startswith("Target") for t in trades) / len(trades), 0)
+        out["avg_r"] = round(float(np.mean([t["r"] for t in trades])), 2)
+    return out
+
+
 def swing_scan(c, tickers=None, workers=4, also_market=False):
     """
     Daily-chart swing setups inside uptrends (price above the 200 EMA, 20 EMA above 200 EMA):
@@ -1222,7 +1243,8 @@ def swing_scan(c, tickers=None, workers=4, also_market=False):
         r = df.iloc[-1]
         if pd.isna(r.EMA20) or pd.isna(r.EMA200) or pd.isna(r.RSI):
             continue
-        f = swing_setup_flags(df, c).iloc[-1]
+        flags = swing_setup_flags(df, c)
+        f = flags.iloc[-1]
         if not (bool(f["uptrend"]) and r.Close >= c.min_price):
             continue
         stats["trend"] += 1
@@ -1242,13 +1264,16 @@ def swing_scan(c, tickers=None, workers=4, also_market=False):
             rng = None
         stop = float(r.Close - c.stop_atr_mult * atr)
         risk = float(r.Close - stop)
+        past = setup_history(df, flags, found, c)
         row = {"Symbol": sym, "Name": names.get(sym, ""), "Price": round(float(r.Close), 2),
                "Setup": ", ".join(SETUP_LABELS[x] for x in found),
                "RSI": round(float(r.RSI), 0), "ATR %": round(float(f["atr_pct"]), 1),
                "Day Vol x": round(float(f["rvol"]), 1),
                "Stop": round(stop, 2), "Risk %": round(risk / r.Close * 100, 1),
                "Target": round(float(r.Close + c.reward_risk * risk), 2),
-               "15d range +/-%": round(rng, 1) if rng is not None else None}
+               "15d range +/-%": round(rng, 1) if rng is not None else None,
+               "Past setups": past["trades"],
+               "Past hit target %": past["target_pct"], "Past avg R": past["avg_r"]}
         if c.risk_dollars > 0 and risk > 0:
             row["Shares"] = int(c.risk_dollars // risk)
         rows.append(row)
@@ -1268,7 +1293,7 @@ def swing_scan(c, tickers=None, workers=4, also_market=False):
     stats["no_data"] = stats["universe"] - stats["loaded"]
     stats["last_bar"] = pd.Timestamp(last_bar).strftime("%b %d") if last_bar is not None else ""
     cols = ["Symbol", "Name", "Price", "Setup", "RSI", "ATR %", "Day Vol x", "Stop", "Risk %", "Target",
-            "15d range +/-%"]
+            "15d range +/-%", "Past setups", "Past hit target %", "Past avg R"]
     if c.risk_dollars > 0:
         cols.append("Shares")
     df = pd.DataFrame(rows, columns=cols)
