@@ -161,7 +161,7 @@ def money_egg():
   #bill { font-size: 34px; cursor: pointer; display: inline-block; transition: transform .15s; user-select: none; }
   #bill:hover { transform: rotate(-8deg) scale(1.2); }
   #msg { font-size: 12px; line-height: 1.35; max-height: 0; opacity: 0; overflow: hidden; transition: all .25s; padding: 0 4px; }
-  #wrap:hover #msg { max-height: 90px; opacity: 1; margin-top: 4px; }
+  #wrap:hover #msg { max-height: 130px; opacity: 1; margin-top: 4px; }
   #sm { font-size: 10px; opacity: .8; margin-top: 3px; }
 </style>
 <div id="wrap">
@@ -184,7 +184,7 @@ document.getElementById("bill").onclick = () => {
     });
   } catch (e) {}
 };
-</script>""", height=118)
+</script>""", height=150)
 
 
 try:
