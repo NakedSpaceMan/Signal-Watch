@@ -293,7 +293,10 @@ def _age_text(hours):
 
 def _open_in_chart():
     st.session_state["ticker_input"] = st.session_state["scan_pick"]
-    st.toast(f"Loaded {st.session_state['scan_pick']}. Open the Chart tab.")
+    # The scanner lives in a fragment, so the sidebar and the chart would not notice the new ticker until
+    # something reruns the whole app. This flag makes the scanner ask for that full rerun (see below).
+    st.session_state["_goto_chart"] = True
+    st.toast(f"Loaded {st.session_state['scan_pick']}. Click the Chart tab to see it.")
 
 
 def build_overlay(sym, positions, tx, suggested=None):
@@ -546,6 +549,8 @@ def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, 
         show_plan(plan, info, acct)
     pick = st.selectbox("Details / open in chart", df["Symbol"].tolist(), key="scan_pick")
     st.button("Load chart", key="load_chart", on_click=_open_in_chart)
+    if st.session_state.pop("_goto_chart", False):
+        st.rerun(scope="app")
     if pick in details:
         show_details(pick, details[pick], sig_interval)
 
