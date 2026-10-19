@@ -166,7 +166,7 @@ def money_egg():
 </style>
 <div id="wrap">
   <div id="bill" title="Click me">💵</div>
-  <div id="msg">Opportunities are everywhere.<br>Stay patient, keep it small, let your stops do their job.
+  <div id="msg">I've got the brains, you've got the  looks<br>Let's make lots of money
     <div id="sm">♪ A nod to the Pet Shop Boys' &ldquo;Opportunities (Let's Make Lots of Money)&rdquo;</div></div>
 </div>
 <script>
