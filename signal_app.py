@@ -1411,6 +1411,33 @@ with tab_port:
                     st.error(str(e))
             d2.download_button("Download all trades as CSV", tx_all.to_csv(index=False), "trades.csv", "text/csv")
 
+            st.markdown("**Fix a stop or target**")
+            st.caption("Typed a wrong number? Pick the trade, change its stop and/or target, and save. Leave a box at 0 to clear it. "
+                       "Shares, price and date stay as they are. On a buy, the stop is also what your R is measured against.")
+            ids_desc = tx_all.sort_values("ts", ascending=False)
+            fx_id = st.selectbox("Trade to fix", ids_desc["id"].tolist(), key="fix_tx",
+                                 format_func=lambda i: "#{} {} {} {:g} @ {:,.2f}".format(
+                                     i, *[ids_desc.loc[ids_desc["id"] == i, c].iloc[0] for c in ("side", "symbol", "qty", "price")]))
+            cur = tx_all[tx_all["id"] == fx_id].iloc[0]
+            f1, f2, f3 = st.columns([1, 1, 1])
+            fx_stop = f1.number_input("Stop", min_value=0.0, step=0.01, format="%.4f", key=f"fix_stop_{fx_id}",
+                                      value=0.0 if pd.isna(cur["stop"]) else float(cur["stop"]),
+                                      help="The corrected stop price. 0 clears it.")
+            fx_target = f2.number_input("Target", min_value=0.0, step=0.01, format="%.4f", key=f"fix_target_{fx_id}",
+                                        value=0.0 if pd.isna(cur["target"]) else float(cur["target"]),
+                                        help="The corrected target price. 0 clears it.")
+            if cur["side"] == "BUY" and fx_stop and fx_stop >= float(cur["price"]):
+                st.warning("That stop is at or above your buy price, so it would trigger immediately. Double-check it.")
+            if cur["side"] == "BUY" and fx_target and fx_target <= float(cur["price"]):
+                st.warning("That target is at or below your buy price. Double-check it.")
+            if f3.button("Save stop / target", key="fix_save"):
+                try:
+                    store.update_levels(fx_id, stop=fx_stop or None, target=fx_target or None)
+                    st.toast("Saved.")
+                    st.rerun()
+                except ValueError as e:
+                    st.error(str(e))
+
     st.subheader("Finished trades")
     if pos["closed"].empty:
         st.caption("Nothing closed yet.")

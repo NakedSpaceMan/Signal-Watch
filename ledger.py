@@ -492,6 +492,20 @@ class Store:
         self.con.commit()
         return int(cur.lastrowid)
 
+    def update_levels(self, tx_id, stop=None, target=None):
+        """Fix the stop and target recorded on one trade (for a typo). None clears the value. Nothing else changes."""
+        row = self.con.execute("SELECT id, side, price FROM transactions WHERE id = ?", (int(tx_id),)).fetchone()
+        if row is None:
+            raise ValueError("That trade no longer exists.")
+        stop, target = _num(stop), _num(target)
+        for name, v in (("stop", stop), ("target", target)):
+            if v is not None and v <= 0:
+                raise ValueError(f"The {name} must be more than zero (or left empty).")
+        if row[1] == "ADJUST" and stop is None and target is None:
+            raise ValueError("A stop-or-target adjustment needs at least one of them. Delete the trade instead.")
+        self.con.execute("UPDATE transactions SET stop = ?, target = ? WHERE id = ?", (stop, target, int(tx_id)))
+        self.con.commit()
+
     def delete_transaction(self, tx_id):
         """Delete one transaction, refusing if it would leave a later sell without shares."""
         tx = self.transactions()
