@@ -133,8 +133,14 @@ def run():
     sb.header("Crypto")
     sb.caption("Your crypto trades and settings are kept separately from your stocks.")
     sb.header("Account & risk")
-    acct = sb.number_input("Crypto account value ($)", min_value=0.0, step=10.0, value=float(saved.get("acct", 100.0)),
-                           help="How much money you are working with for crypto (cash plus coins).")
+    shared_acct, s_reserve = sh.stock_account()
+    acct = sb.number_input("Account value ($, shared with stocks)", min_value=0.0, step=10.0,
+                           value=float(shared_acct if shared_acct > 0 else saved.get("acct", 100.0)), key="cx_acct",
+                           help="Your whole Robinhood account: cash plus stocks plus coins. Stocks and crypto share this one pool of money, "
+                                "so changing it here changes it on the stocks side too. Cash for a crypto plan is this, minus what you "
+                                "hold in stocks and coins.")
+    if abs(acct - shared_acct) > 1e-9:
+        sh.save_account(acct)
     risk_pct = sb.number_input("Max loss per trade (% of account)", min_value=0.1, max_value=10.0, step=0.1,
                                value=float(saved.get("risk_pct", 1.0)),
                                help="If a stop is hit, you lose about this share of your crypto account.")
@@ -295,17 +301,14 @@ def scanner_tab(acct, risk_dollars, max_pos, max_new, stop_mult, rr, weather, in
         lb = stats.get("last_date")
         if lb is not None and pd.Timestamp(lb).weekday() != cr.WW_DAY:
             st.caption(f"Heads up: the latest finished candle is {pd.Timestamp(lb):%A}, not Friday, so these are previews, not Friday-night picks.")
-    cash = max(acct - invested, 0.0)
-    s_acct, s_reserve = sh.stock_account()
     s_mv, s_n = sh.stock_held(cached_prices)
-    if s_acct > 0:                       # one Robinhood account: stocks you hold (maybe for weeks) tie up the same cash
-        shared_cash = max(s_acct - s_mv - invested - s_reserve, 0.0)
-        if shared_cash < cash:
-            st.info(f"You hold {money(s_mv)} in stocks ({s_n} position{'s' if s_n != 1 else ''}), so only {money(shared_cash)} of your "
-                    f"account is free cash. The plan below uses that, not the full {money(cash)} crypto budget.")
-            cash = shared_cash
-    elif s_mv > 0:
-        st.caption(f"You hold {money(s_mv)} in stocks. Set your account value on the stocks side so crypto can subtract it from cash.")
+    s_reserve = sh.stock_account()[1]
+    cash = max(acct - invested - s_mv - s_reserve, 0.0)      # one Robinhood account: stocks held tie up the same cash
+    if s_mv > 0 or s_reserve > 0:
+        st.info(f"One shared account: {money(acct)} total, minus {money(invested)} in coins"
+                + (f", {money(s_mv)} in stocks ({s_n} position{'s' if s_n != 1 else ''})" if s_mv > 0 else "")
+                + (f" and {money(s_reserve)} kept uninvested" if s_reserve > 0 else "")
+                + f" leaves {money(cash)} free cash for this plan.")
     plan, left = [], cash
     for _, r in df.iterrows():
         if len(plan) >= max_new:

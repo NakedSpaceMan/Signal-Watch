@@ -40,6 +40,20 @@ def stock_held(prices_fn=None, db_path=None):
     return _held_value(db_path or lg.DB_PATH, prices_fn)
 
 
+def save_account(value):
+    """Write the shared account value into the stock settings (keeps every other setting)."""
+    try:
+        try:
+            d = json.loads(STOCK_SETTINGS.read_text())
+        except Exception:
+            d = {}
+        d["acct_value"] = float(value)
+        STOCK_SETTINGS.write_text(json.dumps(d))
+        return True
+    except Exception:
+        return False
+
+
 def stock_account():
     """(account value, cash reserve) the stock side saved; (0, 0) if none."""
     try:
