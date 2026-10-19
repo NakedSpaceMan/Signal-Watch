@@ -97,10 +97,17 @@ def resolve_missing(coins, missing):
     return found
 
 
+# Robinhood Crypto's exchange-routing fee for a small account (trailing 30-day volume under $10,000) is 0.95% for market and stop
+# orders (taker) and 0.50% for limit orders that rest on the book (maker). A limit entry plus a stop exit costs about 1.45%
+# round trip; market in and out about 1.9%. "Market maker routing" has no listed commission, but its cost sits in the price.
+DEFAULT_COST_PCT = 1.5
+
+
 def criteria(**kw):
     """Swing rules tuned for coins: no price floor, no earnings, wide daily-swing limit, volume floor in dollars."""
     base = dict(min_price=0.0, min_market_cap=0, min_avg_volume=2_000_000, max_atr_pct=15.0, skip_earnings_days=0,
-                breakout_days=20, breakout_rvol=1.5, stop_atr_mult=2.0, reward_risk=2.0, min_dollar_volume=0)
+                breakout_days=20, breakout_rvol=1.5, stop_atr_mult=2.0, reward_risk=2.0, min_dollar_volume=0,
+                cost_pct=DEFAULT_COST_PCT)
     base.update(kw)
     return sc.SwingCriteria(**base)
 
@@ -239,6 +246,7 @@ def scan(c, frames, names, account=None, risk_dollars=0.0, max_pos_pct=100.0):
                "Score": qscore, "RSI": round(float(r.RSI), 0), "ATR %": round(float(f["atr_pct"]), 1),
                "Vol x": round(float(f["rvol"]), 1), "Stop": nice(stop), "Risk %": round(risk / r.Close * 100, 1),
                "Target": nice(target),
+               "R after fees": round(((target / float(r.Close) - 1) * 100 - c.cost_pct) / (risk / float(r.Close) * 100 + c.cost_pct), 2),
                "Room x": round(float(feat["room"]), 2) if feat["room"] == feat["room"] else None,
                "vs BTC 3mo %": round(float(feat["rs"]) * 100, 1) if feat["rs"] == feat["rs"] and sym != BENCH else None,
                "Past setups": past["trades"], "Past hit target %": past["target_pct"], "Past avg R": past["avg_r"],

@@ -42,6 +42,8 @@ TIPS = {
                          "target, a bit over a third is break-even.",
     "Past avg R": "Average result per past trade on this coin in R (1R = what you risked). Above 0 made money on average there.",
     "ATR %": "Average daily swing as a percent of price. Crypto is often 4-10%, which is why stops are wider and positions smaller.",
+    "R after fees": "Your real reward-to-risk once the round-trip fee is counted: (reward % minus fee) divided by (risk % plus fee). "
+                    "A '2-to-1' setup is lower than 2 here, and the smaller the move, the more fees hurt.",
     "Vol x": "Latest day's trading volume compared with its recent average.",
     "Buy $": "How many dollars of the coin to buy so a stop-out loses about your 'max loss per trade' (capped by your biggest-position limit).",
     "Units": "How much of the coin that dollar amount buys.",
@@ -143,7 +145,10 @@ def run():
                                 value=float(saved.get("stop_mult", 2.0)),
                                 help="Coins swing more than stocks. 2 is a starting point; wider means fewer shake-outs and smaller positions.")
     rr = sb.number_input("Target (times your risk)", min_value=1.0, max_value=6.0, step=0.5, value=float(saved.get("rr", 2.0)))
-    new = dict(acct=acct, risk_pct=risk_pct, max_pos=max_pos, max_new=int(max_new), stop_mult=stop_mult, rr=rr)
+    cost = sb.number_input("Round-trip fee (%)", min_value=0.0, max_value=5.0, step=0.1, value=float(saved.get("cost", cr.DEFAULT_COST_PCT)),
+                           help="What buying and then selling costs you in total. At Robinhood's lowest volume tier: 0.95% per market or stop order, "
+                                "0.50% per limit order. A limit buy plus a stop sell is about 1.45%; market both ways about 1.9%. See the Guide tab.")
+    new = dict(acct=acct, risk_pct=risk_pct, max_pos=max_pos, max_new=int(max_new), stop_mult=stop_mult, rr=rr, cost=cost)
     if new != {k: saved.get(k) for k in new}:
         _save({**saved, **new})
     risk_dollars = round(acct * risk_pct / 100, 2)
@@ -170,13 +175,13 @@ def run():
     t_scan, t_chart, t_port, t_bt, t_learn, t_guide = st.tabs(
         ["Scanner", "Chart", "Portfolio", "Backtest", "Learn", "Guide"])
     with t_scan:
-        scanner_tab(acct, risk_dollars, max_pos, int(max_new), stop_mult, rr, w, invested)
+        scanner_tab(acct, risk_dollars, max_pos, int(max_new), stop_mult, rr, w, invested, cost)
     with t_chart:
         chart_tab(stop_mult, rr, valued)
     with t_port:
         portfolio_tab(store, tx, pos, valued, psum, acct, px)
     with t_bt:
-        backtest_tab(stop_mult, rr)
+        backtest_tab(stop_mult, rr, cost)
     with t_learn:
         st.info("The lessons use made-up charts, and the same patterns show up on coin charts. The big differences: coins move "
                 "more, so stops sit further away, and the market never closes.")
@@ -205,7 +210,7 @@ def _load_chart(coin):
     st.session_state["cx_coin_in"] = coin
 
 
-def scanner_tab(acct, risk_dollars, max_pos, max_new, stop_mult, rr, weather, invested):
+def scanner_tab(acct, risk_dollars, max_pos, max_new, stop_mult, rr, weather, invested, cost):
     st.subheader("Swing scanner for coins")
     st.caption("Looks for the same three setups as the stock scanner (pullback, breakout, bounce) on daily candles, inside "
                "uptrends, then ranks them with the Score. Sized so a stop-out costs about "
@@ -219,7 +224,7 @@ def scanner_tab(acct, risk_dollars, max_pos, max_new, stop_mult, rr, weather, in
     if st.button("Run crypto scan", key="cx_run"):
         with st.spinner("Downloading daily candles and checking setups... this can take a minute."):
             frames, names, no_data = cached_frames(tuple(coins), "2y")
-            c = cr.criteria(stop_atr_mult=stop_mult, reward_risk=rr)
+            c = cr.criteria(stop_atr_mult=stop_mult, reward_risk=rr, cost_pct=cost)
             df, stats = cr.scan(c, frames, names, acct, risk_dollars, max_pos)
             stats["no_data"] = no_data
             st.session_state["cx_scan"] = (df, stats, datetime.now())
@@ -255,7 +260,7 @@ def scanner_tab(acct, risk_dollars, max_pos, max_new, stop_mult, rr, weather, in
     if df.empty:
         st.info("Everything was filtered out. Untick a filter above to see the rest.")
         return
-    show = [c for c in ["Coin", "Name", "Price", "Setup", "Score", "Why", "Stop", "Target", "Risk %", "Buy $", "Units", "Risk $",
+    show = [c for c in ["Coin", "Name", "Price", "Setup", "Score", "Why", "Stop", "Target", "Risk %", "R after fees", "Buy $", "Units", "Risk $",
                         "ATR %", "Room x", "vs BTC 3mo %", "Past setups", "Past hit target %", "Past avg R", "RSI", "Vol x"]
             if c in df.columns]
     table(df[show], TIPS, price_cols=("Price", "Stop", "Target", "Units"))
@@ -457,7 +462,7 @@ def portfolio_tab(store, tx, pos, valued, psum, acct, px):
 
 
 # ------------------------------------------------------------------ backtest
-def backtest_tab(stop_mult, rr):
+def backtest_tab(stop_mult, rr, fee):
     st.subheader("Test the swing rules on past coin data")
     st.caption("Enters at the NEXT day's open after a setup and simulates your stop and target day by day (stop first if one day touches "
                "both), minus a round-trip cost. It only includes coins that exist today, which flatters the results more in crypto than "
@@ -465,14 +470,14 @@ def backtest_tab(stop_mult, rr):
     b1, b2, b3, b4 = st.columns(4)
     setups = b1.multiselect("Setups", ["Pullback", "Breakout", "Bounce"], default=["Pullback", "Breakout", "Bounce"], key="cxb_set")
     hold = b2.number_input("Max days to hold", min_value=2, max_value=60, value=15, key="cxb_hold")
-    cost = b3.number_input("Round-trip cost (%)", min_value=0.0, max_value=5.0, value=0.8, step=0.1, key="cxb_cost",
-                           help="Crypto spreads and fees are often higher than stocks. 0.8% is a cautious guess; check what you actually pay.")
+    cost = b3.number_input("Round-trip cost (%)", min_value=0.0, max_value=5.0, value=float(fee), step=0.1, key="cxb_cost",
+                           help="Starts from your sidebar round-trip fee. Robinhood's lowest tier is 0.95% per market or stop order and 0.50% per limit order.")
     years = b4.selectbox("History", ["2y", "3y", "5y"], index=1, key="cxb_years")
     coins = _coin_set_ui("cxb")
     if st.button("Run crypto backtest", key="cxb_run"):
         with st.spinner("Downloading history and testing..."):
             frames, names, no_data = cached_frames(tuple(coins), years)
-            crit = cr.criteria(stop_atr_mult=stop_mult, reward_risk=rr)
+            crit = cr.criteria(stop_atr_mult=stop_mult, reward_risk=rr, cost_pct=cost)
             params = bt.BTParams(setups=tuple(s.lower() for s in setups) or ("pullback",), stop_atr_mult=stop_mult,
                                  reward_risk=rr, max_hold=int(hold), cost_pct=cost)
             trades = bt.run_backtest(frames, crit, params)
@@ -524,9 +529,11 @@ def guide_tab():
 
 **It moves a lot more.** Daily swings of 4 to 8% are normal for coins, against 1 to 3% for big stocks. So stops sit further from your entry, and the same dollar risk buys a much smaller position. That is normal here, not a bug.
 
-**Overnight risk is real.** There is no closing bell to protect you. A stop can trigger at 3 AM, and in a fast drop it can fill below your stop price. Check how stop orders work for crypto in your Robinhood app before you rely on them, because the whole approach depends on getting out at your stop.
+**Stop orders exist, with a catch.** Robinhood Crypto supports market, limit, stop and stop-limit orders. A stop order turns into a market order when the price hits your stop, and a sell stop can fill up to 5% BELOW the stop price (Robinhood's own limit on the buffer). So the real loss can be bigger than the plan shows, most in a fast overnight drop, which is why the app sizes positions small. A stop-limit order avoids bad fills but may not fill at all.
 
-**Costs are higher.** Spreads and fees on crypto are often larger than on stocks. On a small account that eats into every trade, which is why the backtest here uses a higher default cost (0.8%). Use the figure you actually pay.
+**Fees, in plain words.** Robinhood charges a percentage of each trade, and the percentage depends on how much crypto you traded in the last 30 days (using exchange routing). For a small account that is the top tier: 0.95% when you place a market or stop order, 0.50% when you place a limit order that waits in line. Selling costs the same percentage again, so a round trip is about 1.9% with market orders, or about 1.45% if you buy with a limit order and exit with a stop. There is also a setting called market maker routing with no listed commission, but its cost is hidden in the price you get, and Robinhood says neither choice is always cheaper. The sidebar's Round-trip fee (default 1.5%) is used everywhere: the scanner's "R after fees" column, the past-setup stats and the backtest. The 'R after fees' column is the honest version of reward-to-risk: a 2-to-1 setup with a small move can drop to under 1.5-to-1 once fees are counted. Fees hurt small, quick trades the most, so favor setups with room to run.
+
+**Crypto never takes a day off.** It trades 24 hours a day, 7 days a week, weekends and holidays included (Robinhood only pauses it for scheduled maintenance). The only "close" is the daily candle: each daily candle ends at midnight UTC (5 PM Pacific in summer, 4 PM in winter), which is just where the chart cuts one day from the next. Weekends show up on the charts because real trading happens on them.
 
 **Bitcoin is the tide.** When Bitcoin is in a downtrend, nearly every coin falls harder. The "crypto market weather" banner reads Bitcoin's trend, and the scanner asks for a higher Score when it is weak.
 
