@@ -733,13 +733,19 @@ with tab_scan:
     preset = st.radio("Scanner", [SWING, STEADY, MOMENTUM], horizontal=True, key="scan_preset")
     if preset == SWING:
         picked = st.multiselect("Setups to look for", ["Pullback", "Breakout", "Bounce"],
-                                default=["Pullback", "Breakout", "Bounce"])
+                                default=["Pullback", "Breakout", "Bounce"],
+                                help="Pullback: an uptrending stock dips back to its 20-day average. Breakout: it pushes above its 20-day high on strong volume. Bounce: it was oversold and is turning up. Remove any you don't want.")
         c1, c2, c3, c4, c5 = st.columns(5)
-        w_price = c1.number_input("Price at least ($)", value=10.0, step=1.0)
-        w_vol = c2.number_input("Avg volume at least (M shares)", value=1.0, step=0.5)
-        w_dollar = c3.number_input("Avg $ volume at least (M)", value=10.0, step=5.0)
-        w_atr = c4.number_input("Max daily swing (ATR %)", value=6.0, step=0.5)
-        w_earn = c5.number_input("Skip earnings within (days)", min_value=0, max_value=30, value=10)
+        w_price = c1.number_input("Price at least ($)", value=10.0, step=1.0,
+                                  help="Skips stocks priced below this. Cheap stocks tend to gap more and fill your stop worse. Lower it to see cheaper stocks; raise it for steadier ones.")
+        w_vol = c2.number_input("Avg volume at least (M shares)", value=1.0, step=0.5,
+                                help="The stock must trade at least this many shares a day on average (1.00 = one million). Higher means easier to buy and sell at a fair price; lower lets thinly traded stocks in.")
+        w_dollar = c3.number_input("Avg $ volume at least (M)", value=10.0, step=5.0,
+                                   help="Average dollars traded per day (price times shares), in millions. 10 means about $10 million a day. It catches cheap stocks with lots of shares that still are not liquid.")
+        w_atr = c4.number_input("Max daily swing (ATR %)", value=6.0, step=0.5,
+                                help="How much the stock typically moves in a day, as a percent of its price (ATR). Stocks swinging more than this are skipped. Wild stocks need wide stops, so you can only afford small positions. Lower = calmer stocks only.")
+        w_earn = c5.number_input("Skip earnings within (days)", min_value=0, max_value=30, value=10,
+                                help="Skips stocks reporting earnings within this many days. Earnings can make a stock jump past your stop. Set 0 to turn this off.")
         criteria = sc.SwingCriteria(setups=tuple(x.lower() for x in picked) or ("pullback",),
                                     min_price=w_price, min_avg_volume=int(w_vol * 1_000_000),
                                     min_dollar_volume=w_dollar * 1_000_000, max_atr_pct=w_atr,
@@ -751,15 +757,23 @@ with tab_scan:
                    "daily swings (set in the sidebar under Trade levels).")
     elif preset == STEADY:
         c1, c2, c3, c4, c5, c6 = st.columns(6)
-        s_price = c1.number_input("Price at least ($)", value=10.0, step=1.0)
-        s_vol = c2.number_input("Avg volume at least (M shares)", value=1.0, step=0.5)
-        s_dollar = c3.number_input("Avg $ volume at least (M)", value=10.0, step=5.0)
-        s_dist = c4.number_input("Within % of 20 EMA", value=3.0, step=0.5)
-        s_rsi_lo = c5.number_input("RSI at least", value=40.0, step=1.0)
-        s_rsi_hi = c6.number_input("RSI at most", value=60.0, step=1.0)
+        s_price = c1.number_input("Price at least ($)", value=10.0, step=1.0,
+                                  help="Skips stocks priced below this. Cheap stocks tend to gap more and fill your stop worse. Lower it to see cheaper stocks; raise it for steadier ones.")
+        s_vol = c2.number_input("Avg volume at least (M shares)", value=1.0, step=0.5,
+                                help="The stock must trade at least this many shares a day on average (1.00 = one million). Higher means easier to buy and sell at a fair price; lower lets thinly traded stocks in.")
+        s_dollar = c3.number_input("Avg $ volume at least (M)", value=10.0, step=5.0,
+                                   help="Average dollars traded per day (price times shares), in millions. 10 means about $10 million a day. It catches cheap stocks with lots of shares that still are not liquid.")
+        s_dist = c4.number_input("Within % of 20 EMA", value=3.0, step=0.5,
+                                help="How close the price must be to its 20-day average (the orange line). Smaller = only stocks sitting right on the line.")
+        s_rsi_lo = c5.number_input("RSI at least", value=40.0, step=1.0,
+                                  help="RSI is a 0-100 gauge of how stretched a stock is. Under about 30 is oversold, over 70 overheated. This is the lowest value allowed.")
+        s_rsi_hi = c6.number_input("RSI at most", value=60.0, step=1.0,
+                                  help="The highest RSI allowed. 60 keeps out stocks that already ran up and look overheated.")
         d1, d2 = st.columns(2)
-        s_atr = d1.number_input("Max daily swing (ATR %)", value=4.0, step=0.5)
-        s_earn = d2.number_input("Skip earnings within (days, 0 = don't skip)", min_value=0, max_value=30, value=5)
+        s_atr = d1.number_input("Max daily swing (ATR %)", value=4.0, step=0.5,
+                                help="How much the stock typically moves in a day, as a percent of its price (ATR). Stocks swinging more than this are skipped. Wild stocks need wide stops, so you can only afford small positions. Lower = calmer stocks only.")
+        s_earn = d2.number_input("Skip earnings within (days, 0 = don't skip)", min_value=0, max_value=30, value=5,
+                                help="Skips stocks reporting earnings within this many days. Earnings can make a stock jump past your stop. Set 0 to turn this off.")
         criteria = sc.SteadyCriteria(min_price=s_price, min_avg_volume=int(s_vol * 1_000_000),
                                      min_dollar_volume=s_dollar * 1_000_000, max_dist_ema20_pct=s_dist,
                                      rsi_min=s_rsi_lo, rsi_max=s_rsi_hi, max_atr_pct=s_atr,
@@ -768,27 +782,39 @@ with tab_scan:
                    "have pulled back near the 20 EMA without being overheated or wildly volatile.")
     else:
         c1, c2, c3, c4, c5, c6 = st.columns(6)
-        min_change = c1.number_input("Change % at least", value=10.0, step=1.0)
-        price_lo = c2.number_input("Price from ($)", value=1.0, step=0.5)
-        price_hi = c3.number_input("Price to ($)", value=20.0, step=1.0)
-        max_float_m = c4.number_input("Float at most (M)", value=20.0, step=1.0)
-        min_rvol = c5.number_input("Rel. volume over", value=5.0, step=0.5)
-        min_vol = c6.number_input("Min volume today", value=100_000, step=50_000)
+        min_change = c1.number_input("Change % at least", value=10.0, step=1.0,
+                                     help="Only stocks up at least this much today.")
+        price_lo = c2.number_input("Price from ($)", value=1.0, step=0.5,
+                                  help="Lowest share price to include.")
+        price_hi = c3.number_input("Price to ($)", value=20.0, step=1.0,
+                                  help="Highest share price to include.")
+        max_float_m = c4.number_input("Float at most (M)", value=20.0, step=1.0,
+                                      help="Float is how many shares are available to trade, in millions. Low-float stocks can move fast, up or down.")
+        min_rvol = c5.number_input("Rel. volume over", value=5.0, step=0.5,
+                                   help="Today's volume compared with the stock's normal volume. 5 means five times busier than usual, a sign something is happening.")
+        min_vol = c6.number_input("Min volume today", value=100_000, step=50_000,
+                                  help="Shares traded so far today. Keeps out stocks too quiet to trade.")
         e1, e2 = st.columns(2)
-        m_dollar = e1.number_input("Min $ traded today ($)", value=250_000, step=50_000)
-        m_stop = e2.number_input("Stop = % below price (0 = no sizing for this scanner)", value=0.0, step=1.0)
+        m_dollar = e1.number_input("Min $ traded today ($)", value=250_000, step=50_000,
+                                  help="Dollars traded so far today (price times shares). Another way to skip stocks you couldn't easily sell.")
+        m_stop = e2.number_input("Stop = % below price (0 = no sizing for this scanner)", value=0.0, step=1.0,
+                                 help="Sets your stop this many percent under the price so the scan can size a position. Leave at 0 to skip sizing.")
         criteria = sc.Criteria(min_change, price_lo, price_hi, max_float_m * 1_000_000, min_rvol,
                                int(min_vol), min_dollar_volume=float(m_dollar))
         st.caption("Fast, volatile, high risk: wide spreads, halts and sudden reversals are common. It pulls up to "
                    "750 of the biggest movers from Yahoo. If it hits that cap the summary line says so.")
 
     o1, o2, o3, o4 = st.columns(4)
-    only_buy = o1.checkbox("Only show stocks with a recent BUY signal", value=False)
-    hide_nofit = o2.checkbox("Hide stocks that don't fit my account", value=True)
-    recent_bars = o3.number_input("Count a BUY as recent for (bars)", min_value=1, max_value=30, value=6)
+    only_buy = o1.checkbox("Only show stocks with a recent BUY signal", value=False,
+                           help="When ticked, the list only keeps stocks whose chart showed a BUY signal within the last few bars (set in the next box). Fewer results, fresher timing.")
+    hide_nofit = o2.checkbox("Hide stocks that don't fit my account", value=True,
+                            help="Hides stocks you couldn't buy sensibly with your account settings: not enough cash, the position would be too big, or not even one share fits your risk limit. Untick to see everything.")
+    recent_bars = o3.number_input("Count a BUY as recent for (bars)", min_value=1, max_value=30, value=6,
+                                  help="How far back a BUY signal still counts as recent, in chart bars (candles). 6 means within the last 6. Raise it to include older signals.")
     sort_cols = {SWING: ["Score", "Day Vol x", "RSI", "Risk %"], STEADY: ["Avg Vol (M)", "RSI", "ATR %"],
                  MOMENTUM: ["Rel Vol", "Change %", "Volume"]}[preset]
-    sort_by = o4.selectbox("Sort by", ["Quality score (default)" if preset == SWING else "Signal rank (default)"] + sort_cols)
+    sort_by = o4.selectbox("Sort by", ["Quality score (default)" if preset == SWING else "Signal rank (default)"] + sort_cols,
+                           help="Which column orders the results. The default puts the best-looking setups first (Quality score for swing setups, current signal for the others). Pick another column to re-rank.")
 
     hide_stretch = weather_gate = False
     if preset == SWING:
@@ -802,8 +828,10 @@ with tab_scan:
 
     wl = store.watchlists()
     w1, w2 = st.columns(2)
-    chosen_lists = w1.multiselect("Saved watchlists to scan", list(wl))
-    typed = w2.text_input("Extra tickers to scan (comma-separated)", value="")
+    chosen_lists = w1.multiselect("Saved watchlists to scan", list(wl),
+                                  help="Scan only the stocks on your saved lists. Create lists under Manage watchlists below.")
+    typed = w2.text_input("Extra tickers to scan (comma-separated)", value="",
+                          help="Type tickers like AAPL, MSFT to scan just those (plus any saved lists). Leave blank to scan the market.")
     symbols = sorted({s for n in chosen_lists for s in wl[n]} |
                      {t.upper() for t in typed.replace(",", " ").split() if t})
     also_market = True
