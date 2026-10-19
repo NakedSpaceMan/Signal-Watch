@@ -16,6 +16,10 @@ read from the last three months of daily data, including an earnings check and a
 - **Scanner:** swing setups, steady uptrends and low-float momentum, sized to your account and risk limits.
 - **Portfolio:** positions, stop-raising suggestions, trade history, price alerts. **Practice mode** keeps a separate fake-money ledger.
 - **Today / Weekly review:** a daily checklist and a weekly look back with praise and one thing to improve.
+- **Backtest & history:** test the swing rules on past data, with plain-English hover help on every column.
+- **Learn tab:** lessons on reading a chart and trading support and resistance, bounces, breakouts, pullbacks, flags and
+  triangles, using made-up practice charts with every level marked, plus quizzes and a **Practice trades** mode that scores
+  you in R. No real money, nothing saved to your ledger.
 - **Beginner mode:** plain-English ("explain like I'm five") text everywhere.
 - **Guide tab:** what every box in the sidebar does.
 
@@ -71,7 +75,7 @@ Stored next to the app, on your computer only (copy them to back up):
 
 ## Testing and feedback
 Please open an **Issue** with: what you did, what you expected, what happened, and a screenshot or the error text.
-Useful things to try: Practice mode, Beginner mode, the Scanner, the News check on a few different stocks
+Useful things to try: Practice mode, Beginner mode, the Scanner, the Learn tab (try Practice trades), the News check on a few different stocks
 (including foreign ones such as RYCEY), and the Guide tab.
 
 ## Known limits

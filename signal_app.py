@@ -10,6 +10,7 @@ Tabs:
     Chart                intraday signal chart or the swing chart with hover-to-learn markers
     Portfolio            what you own, P&L, risk to stops, trade log, watchlists, price alerts
     Backtest & history   test the swing rules on past data, and see how saved scans performed
+    Learn                lessons and practice trades on made-up charts (support, breakouts, flags and more)
 
 Keep all the .py files together in one folder. Your trades are stored locally in
 signal_ledger.db and your settings in signal_settings.json. Nothing here connects
@@ -32,6 +33,7 @@ import backtest as bt
 import coach
 import forecast as fc
 import guide
+import learn
 import ledger as lg
 import scanner as sc
 import signal_overlay as so
@@ -459,8 +461,8 @@ if practice:
 show_weather_banner()
 show_alert_banner()
 
-(tab_today, tab_scan, tab_chart, tab_port, tab_week, tab_bt, tab_guide) = st.tabs(
-    ["Today", "Scanner", "Chart", "Portfolio", "Weekly review", "Backtest & history", "Guide"])
+(tab_today, tab_scan, tab_chart, tab_port, tab_week, tab_bt, tab_learn, tab_guide) = st.tabs(
+    ["Today", "Scanner", "Chart", "Portfolio", "Weekly review", "Backtest & history", "Learn", "Guide"])
 
 # ====================================================================== TODAY TAB (daily checklist)
 with tab_today:
@@ -1317,6 +1319,11 @@ with tab_week:
                 for k_, txt in lesson_inputs:
                     store.set_lesson(k_, txt)
                 st.success("Saved.")
+
+
+# ====================================================================== LEARN TAB
+with tab_learn:
+    learn.show(risk_dollars=round(acct_value * risk_pct / 100, 2))
 
 
 # ====================================================================== GUIDE TAB
