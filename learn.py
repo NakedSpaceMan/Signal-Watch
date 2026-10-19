@@ -276,6 +276,9 @@ def _lesson_view(key, risk_dollars):
     if reveal and L["trade"]:
         out = chart["outcome"]
         st.markdown(_md(_result_line(out, risk_dollars)))
+        why_txt = WHY_WIN.get(L["kind"]) if out["r"] > 0 else WHY_LOSS.get(L["kind"])
+        if why_txt:
+            st.markdown("**Why:** " + why_txt)
         st.caption("This example was chosen to win or lose at random. Roughly half the time, setups like this fail. "
                    "That is not a flaw; it is why the stop exists.")
 
@@ -346,6 +349,92 @@ def _quiz(key, L):
             st.caption("Here is the same chart with everything marked up and the result revealed:")
             _plot(lc.build_figure(chart, markup=True, reveal=True, basics=False, show_plan=True), f"lrn_qans_{key}_{qseed}")
         st.button("New quiz chart", key=f"lrn_qnew_{key}", on_click=_new_seed, args=(qk,))
+
+
+WHY_WIN = {
+    "range": "Support held again. Buyers stepped in at the same floor as before, and price rose back toward the ceiling.",
+    "bounce": "The reversal was real. Sellers ran out of steam at support and buyers pushed price back up.",
+    "breakout": "The breakout was real. Price held above the old ceiling (which turned into support) and new buyers kept pushing.",
+    "pullback": "The uptrend resumed. The dip held near the rising 20-day line and buyers came back.",
+    "flag": "The pause was just a pause. Buyers returned and the strong run continued.",
+    "triangle": "The squeeze released upward. Buyers kept lifting the lows until they overpowered the flat ceiling.",
+}
+WHY_LOSS = {
+    "range": "Support broke. Price fell below the floor, so the idea (buyers defend this level) was wrong. Leaving is exactly the plan.",
+    "bounce": "The bounce failed. Price made a new low under the reversal candle, so sellers were not finished.",
+    "breakout": "A false breakout. Price fell back under the old ceiling, so the new buyers weren't really there. This happens "
+                "often, and a stop just under the breakout level keeps it small.",
+    "pullback": "The dip kept going. Price fell through the 20-day line and the dip's low, which can be the start of a trend "
+                "change instead of a rest.",
+    "flag": "The flag failed. Price dropped back through the pause instead of continuing, so the buyers did not return.",
+    "triangle": "A false breakout. Price fell back inside the pattern. Triangles can fail, which is why the stop sits inside them.",
+}
+
+
+def _explain(chart, res):
+    """Plain-English reasons a practice trade won, lost or went nowhere. Uses what price really did."""
+    kind, fut, p, tb = chart["kind"], chart["fut"], chart["plan"], chart["outcome"]
+    out, pl = res["out"], res["plan"]
+    entry, su, tu = pl["entry"], pl["stop"], pl["target"]
+    bars = fut.iloc[: out["bar"] + 1]
+    hi, lo = float(bars.High.max()), float(bars.Low.min())
+    won, lost = out["reason"].startswith("Target"), out["reason"].startswith("Stop")
+    tb_won, tb_lost = tb["reason"].startswith("Target"), tb["reason"].startswith("Stop")
+    lines = []
+    if kind == "none":
+        lines.append("There was no real setup, so there was no level to anchor your stop to and no reason to expect a "
+                     "particular move. Whatever happened was mostly noise. " + (
+                         "A win here is luck, not skill." if won else "A loss here is the price of guessing."))
+        return lines
+
+    if won:
+        lines.append(f"**Why it worked:** price rose to your target (${tu:,.2f}) before it fell to your stop (${su:,.2f}).")
+        if tb_won:
+            lines.append(WHY_WIN[kind])
+        elif tb_lost:
+            how = ("your target was closer than the textbook one, so price reached it before the setup failed"
+                   if tu < p["target"] else "your stop was wider than the textbook one, so the early dip didn't knock you out"
+                   if su < p["stop"] else "you got out before the setup failed")
+            lines.append("The textbook trade for this setup actually lost this time. You won because " + how + ". A win is "
+                         "not proof of a good plan, so judge by whether your stop and target were sensible.")
+    elif lost:
+        gap = " Price gapped through your stop overnight, so you got out a little worse than planned." if "gap" in out["reason"] else ""
+        lines.append(f"**Why it lost:** price fell to your stop (${su:,.2f}) before it reached your target (${tu:,.2f}). "
+                     f"Your loss was limited to what your stop allowed.{gap}")
+        if tb_lost:
+            lines.append(WHY_LOSS[kind] + " Even the textbook plan lost here. Some setups fail, and the stop did its job.")
+        elif tb_won:
+            if entry - su < 0.8 * (entry - p["stop"]):
+                lines.append(f"**Your stop was tighter than the pattern needed.** It sat at ${su:,.2f}; the level that proves the "
+                             f"idea wrong was about ${p['stop']:,.2f}. Price dipped to ${lo:,.2f} and shook you out, then the setup "
+                             "worked. A stop that is too tight loses to ordinary day-to-day wiggle.")
+            elif su > p["stop"]:
+                lines.append(f"**Close, but just short.** Your stop (${su:,.2f}) sat a little above the pattern's natural stop "
+                             f"(about ${p['stop']:,.2f}). Price dipped to ${lo:,.2f}, enough to stop you out before the setup worked. "
+                             "That is the trade-off: a closer stop means a smaller loss but more shake-outs.")
+            else:
+                lines.append(f"**The setup worked, but your target was too far.** Price rose to about ${hi:,.2f} and then turned "
+                             f"around before reaching ${tu:,.2f}. A target near where sellers appeared (about ${p['target']:,.2f}) "
+                             "would have locked the profit in.")
+        else:
+            lines.append(f"Price never got past ${hi:,.2f}, so your target looked a bit far for this move.")
+    else:
+        lines.append(f"**Why neither level was hit:** in {lc.MAX_HOLD} days price peaked at ${hi:,.2f} (your target was "
+                     f"${tu:,.2f}) and bottomed at ${lo:,.2f} (your stop was ${su:,.2f}). A target that is too far or a stop that "
+                     "is too wide ties your money up. A nearer target at a level where sellers appeared would have worked better.")
+
+    # how the stop and target compare with the pattern's own levels
+    risk_u, risk_t = entry - su, entry - p["stop"]
+    if risk_u < 0.8 * risk_t:
+        lines.append(f"**Stop check:** yours was about {risk_u / entry * 100:.1f}% below your entry; the pattern's natural stop was "
+                     f"about {risk_t / entry * 100:.1f}% below. Tighter stops get hit by normal wiggle.")
+    elif risk_u > 1.6 * risk_t:
+        lines.append(f"**Stop check:** yours was about {risk_u / entry * 100:.1f}% below your entry; the pattern's natural stop was "
+                     f"about {risk_t / entry * 100:.1f}%. A stop that far means a bigger loss when you're wrong.")
+    else:
+        lines.append(f"**Stop check:** your stop was about {risk_u / entry * 100:.1f}% below your entry, close to where the pattern "
+                     "says you are wrong. Good.")
+    return lines
 
 
 # ------------------------------------------------------------------ practice mode
@@ -474,6 +563,8 @@ def _practice_view(risk_dollars):
         st.markdown(_md(_result_line(res["out"], risk_dollars)))
         st.caption(_md(f"Your plan: buy about ${pl['entry']:,.2f}, stop ${pl['stop']:,.2f}, target ${pl['target']:,.2f} "
                        f"({(pl['target'] - pl['entry']) / (pl['entry'] - pl['stop']):.1f} times your risk)."))
+        for line in _explain(chart, res):
+            st.markdown("- " + _md(line))
     else:
         _plot(lc.build_figure(chart, markup=False, reveal=True, show_plan=False), f"lrn_pres_{seed}")
         st.markdown("**You skipped.**")
@@ -482,13 +573,19 @@ def _practice_view(risk_dollars):
         if res["action"].startswith("Buy"):
             st.warning("This chart had no real setup: no level, no clean trend, no squeeze. Buying here is a guess, even if it worked "
                        "out. Judge the decision, not just the result.")
+            for line in _explain(chart, res):
+                st.markdown("- " + _md(line))
         else:
             st.success("Good skip. This chart had no real setup. Waiting for a clean one is the skill.")
+            st.markdown("- **Why there was nothing to trade:** no level price kept turning around, no clean trend, no squeeze and no "
+                        "volume burst. Without a level you can't say where a stop belongs, so any trade is a guess.")
     else:
         verb = "worked" if tb["r"] > 0 else "failed"
         st.info(_md(f"This was a **{lc.NAMES[kind]}** setup. A textbook plan (stop {p['stop']:,.2f}, target {p['target']:,.2f}) "
                     f"{verb} this time ({tb['r']:+.1f}R)."))
         if not res["action"].startswith("Buy"):
+            st.markdown("- " + (("**Why it would have worked:** " + WHY_WIN[kind]) if tb["r"] > 0
+                                else ("**Why it would have failed:** " + WHY_LOSS[kind])))
             st.caption("Skipping a real setup is fine. You can't take every one. Judge a decision by whether the setup was "
                        "valid, not by one outcome.")
     with st.expander("See this chart marked up"):
