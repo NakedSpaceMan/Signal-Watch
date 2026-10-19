@@ -30,6 +30,7 @@ import streamlit as st
 
 import backtest as bt
 import coach
+import forecast as fc
 import guide
 import ledger as lg
 import scanner as sc
@@ -609,7 +610,10 @@ def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, 
         return
     if sort_by != "Signal rank (default)" and sort_by in df.columns:
         df = df.sort_values(sort_by, ascending=False, na_position="last")
-    show_table(df)
+    show_table(df, column_config=col_help(df, {
+        "15d range +/-%": "How far this stock usually moves in 15 trading days (about 2 times out of 3), up or down, "
+                          "based on how much it has been moving lately. Compare it with the distance to the Target: "
+                          "a target much bigger than this range is a long shot. It says nothing about direction."}))
     if info["enabled"]:
         st.caption("'Max shares / cost / risk' is the biggest position you could take in that ONE stock. "
                    "You cannot take them all at once. The combined plan below spends your shared budget in rank order.")
@@ -775,6 +779,84 @@ def show_news_check(sym, v, news, price):
                   "close the app.")
 
 
+RANGE_TIPS = {
+    "Situation": "Which group of past days this row looks at: every ordinary day in the window, or only days when a swing "
+                 "setup (Pullback, Breakout or Bounce) showed up on this stock.",
+    "Trades": "How many pretend entries were tested. Under about 20, take the percentages with a big grain of salt.",
+    "Target first %": "How often price reached the target before the stop. Many trades end without hitting either, "
+                      "so look at Avg R (the real scoreboard) rather than this number alone.",
+    "Stop first %": "How often the stop was hit before the target. Stops are meant to be hit sometimes. That is how "
+                    "losses stay small.",
+    "Timed out %": "How often neither was hit within the hold window, so the trade was closed at the end.",
+    "Avg R": "Average result per trade in units of risk, after costs. Above 0 means the plan made money on average "
+             "on this stock.",
+}
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def cached_plan_history(sym, last_bar, stop_mult_, rr_, _df, _flags):
+    return fc.plan_history(_df, _flags, stop_mult_, rr_)
+
+
+def show_range_box(sym, df, cone, flags):
+    """The words under the chart that explain the shaded cone, plus the 'did this plan work before?' table."""
+    if not cone:
+        st.caption("Not enough price history to draw a likely range for this stock.")
+        return
+    p0, h = cone["price"], cone["horizon"]
+    end = cone["dates"][-1]
+    lo, hi = cone["end68"]
+    lo2, hi2 = cone["end95"]
+    st.markdown(
+        f"**Likely range by {end:%b %d}** ({h} trading days): **${lo:,.2f} to ${hi:,.2f}** about 2 times out of 3, "
+        f"and **${lo2:,.2f} to ${hi2:,.2f}** almost always (about 19 times out of 20). That is roughly "
+        f"{(cone['pct68_down'] + cone['pct68']) / 2:.0f}% either way for the usual range.")
+    atr = float(flags["atr"].iloc[-1])
+    if atr == atr and atr > 0:
+        stp = p0 - stop_mult * atr
+        tgt = p0 + reward_risk * (p0 - stp)
+        lo_end = cone["lo68"][-1]
+        notes = []
+        if tgt > hi2:
+            notes.append(f"a target of ${tgt:,.2f} is beyond even the wider range, so it would take an unusual move")
+        elif tgt > hi:
+            notes.append(f"a target of ${tgt:,.2f} is inside the wider range but outside the usual one, so it is "
+                         "possible but not the typical outcome")
+        else:
+            notes.append(f"a target of ${tgt:,.2f} is inside the usual range, so it is within normal movement")
+        if stp > lo_end:
+            notes.append(f"a stop at ${stp:,.2f} is above the bottom of the usual range, so ordinary wiggles could hit it")
+        else:
+            notes.append(f"a stop at ${stp:,.2f} sits below the usual range, so only a bigger-than-normal drop would hit it")
+        st.caption("With your current settings: " + "; ".join(notes) + ".")
+    st.caption("This shows how far the stock could wander. It does not say which way. The bands are checked against "
+               f"this stock's own history ({cone['samples']} past days), but surprises like earnings or big news can "
+               "break through any range. It is a map of what is normal, not a promise.")
+    with st.expander("How did a plan like this work on this stock in the past?"):
+        try:
+            ph = cached_plan_history(sym, str(df.index[-1]), float(stop_mult), float(reward_risk), df, flags)
+        except Exception as e:
+            st.caption(f"Couldn't work that out: {e}")
+            return
+        rows = []
+        for label, key in (("Any ordinary day", "all"), ("Days a setup showed up", "setup")):
+            r = ph[key]
+            if not r["trades"]:
+                rows.append({"Situation": label, "Trades": 0})
+                continue
+            rows.append({"Situation": label, "Trades": r["trades"], "Target first %": round(r["target_pct"], 1),
+                         "Stop first %": round(r["stop_pct"], 1), "Timed out %": round(r["timeout_pct"], 1),
+                         "Avg R": round(r["avg_r"], 2)})
+        tb = pd.DataFrame(rows)
+        show_table(tb, column_config=col_help(tb, RANGE_TIPS))
+        st.caption(f"Pretend entries at the next open over about the last 3 years of this stock, with a stop "
+                   f"{stop_mult:g} ATR below, a target {reward_risk:g}x the risk above, and up to {ph['days']} trading "
+                   f"days. Avg R is the number to watch: above 0 means the plan made money on average on this stock after "
+                   f"costs. (If almost every trade ended at the target or the stop, you would need to win about "
+                   f"{ph['breakeven_pct']:.0f}% of them to break even.) The past on one stock is a small sample. Use "
+                   "the Backtest tab for a broader test.")
+
+
 def show_verdict(sym, df, flags, crit):
     """Buy / Hold / Sell card built from the last 3 months of daily bars."""
     dates, fb_days = cached_earnings(sym)
@@ -910,6 +992,8 @@ def chart_view(mode):
                                default=["Pullback", "Breakout", "Bounce"], key="swing_markers")
         outcomes = st.checkbox("Show what happened next in the hover text (for learning)", value=True,
                                key="swing_outcomes")
+        show_cone = st.checkbox("Show the likely range for the next 15 trading days (shaded, right of the last candle)",
+                                value=True, key="swing_cone")
         ranges = {"1 month": 21, "3 months": 63, "6 months": 126, "1 year": 252, "2 years": 504}
         rng_pick = st.radio("Time range (each candle is one trading day)", list(ranges), index=1,
                             horizontal=True, key="swing_range")
@@ -921,9 +1005,15 @@ def chart_view(mode):
             stp = float(last.Close - stop_mult * atr)
             sugg = {"suggested_stop": stp, "suggested_target": float(last.Close + reward_risk * (last.Close - stp))}
         overlay = build_overlay(ticker, valued, tx_all, sugg)
+        cone = None
+        if show_cone:
+            try:
+                cone = fc.range_cone(df)
+            except Exception:
+                cone = None
         fig = swc.build_swing_chart(df.tail(n), flags.tail(n), crit, f"{ticker} - swing setups (daily)",
                                     setups=tuple(s.lower() for s in shown), opts={"volume": opt_volume, "sr": opt_sr, "beginner": beginner},
-                                    overlay=overlay, show_outcomes=outcomes)
+                                    overlay=overlay, show_outcomes=outcomes, cone=cone)
         st.caption("The swing chart is always daily, so the Bar size setting in the sidebar doesn't apply here. "
                    "Pick a bar size or switch to Intraday signals to use it.")
         st.caption("Hover a marker to see why the scanner would have flagged that day, the levels it would have "
@@ -931,6 +1021,8 @@ def chart_view(mode):
                    "Your own entry, stop and target (from the Portfolio tab) are solid lines; suggested levels are dotted.")
         fig.update_layout(uirevision=f"{ticker}-swing")
         show_chart(fig, "swing_chart")
+        if show_cone:
+            show_range_box(ticker, df, cone, flags)
         show_verdict(ticker, df, flags, crit)
         st.subheader("Current read")
         st.code("\n".join(swc.current_swing_read(df, flags, crit, plain=beginner)), language=None)

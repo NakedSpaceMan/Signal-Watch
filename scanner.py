@@ -1235,6 +1235,11 @@ def swing_scan(c, tickers=None, workers=4, also_market=False):
         stats["setup"] += 1
 
         atr = float(f["atr"])
+        try:
+            import forecast as _fc
+            rng = _fc.typical_range_pct(df["Close"])
+        except Exception:
+            rng = None
         stop = float(r.Close - c.stop_atr_mult * atr)
         risk = float(r.Close - stop)
         row = {"Symbol": sym, "Name": names.get(sym, ""), "Price": round(float(r.Close), 2),
@@ -1242,7 +1247,8 @@ def swing_scan(c, tickers=None, workers=4, also_market=False):
                "RSI": round(float(r.RSI), 0), "ATR %": round(float(f["atr_pct"]), 1),
                "Day Vol x": round(float(f["rvol"]), 1),
                "Stop": round(stop, 2), "Risk %": round(risk / r.Close * 100, 1),
-               "Target": round(float(r.Close + c.reward_risk * risk), 2)}
+               "Target": round(float(r.Close + c.reward_risk * risk), 2),
+               "15d range +/-%": round(rng, 1) if rng is not None else None}
         if c.risk_dollars > 0 and risk > 0:
             row["Shares"] = int(c.risk_dollars // risk)
         rows.append(row)
@@ -1261,7 +1267,8 @@ def swing_scan(c, tickers=None, workers=4, also_market=False):
     stats["matches"] = len(rows)
     stats["no_data"] = stats["universe"] - stats["loaded"]
     stats["last_bar"] = pd.Timestamp(last_bar).strftime("%b %d") if last_bar is not None else ""
-    cols = ["Symbol", "Name", "Price", "Setup", "RSI", "ATR %", "Day Vol x", "Stop", "Risk %", "Target"]
+    cols = ["Symbol", "Name", "Price", "Setup", "RSI", "ATR %", "Day Vol x", "Stop", "Risk %", "Target",
+            "15d range +/-%"]
     if c.risk_dollars > 0:
         cols.append("Shares")
     df = pd.DataFrame(rows, columns=cols)

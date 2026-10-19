@@ -137,8 +137,9 @@ def _outcome_line(trade, atr, p, mode="short"):
 
 
 def build_swing_chart(df, flags, criteria, title, setups=("pullback", "breakout", "bounce"),
-                      opts=None, overlay=None, params=None, show_outcomes=True, sr=None):
+                      opts=None, overlay=None, params=None, show_outcomes=True, sr=None, cone=None):
     """
+    cone   - optional forecast.range_cone(...) result, drawn to the right of the last candle
     df     - daily OHLCV with indicators (signal_overlay.add_indicators)
     flags  - scanner.swing_setup_flags(df, criteria), same index as df
     Returns a Plotly figure. `setups` picks which markers to draw.
@@ -191,6 +192,8 @@ def build_swing_chart(df, flags, criteria, title, setups=("pullback", "breakout"
             hovertext=tips, hoverinfo="text"), row=1, col=1)
 
     cu.add_position_overlay(fig, overlay, x, daily=True, row=1)
+    if cone:
+        add_range_cone(fig, cone, x)
 
     if o["volume"]:
         vcol = np.where(df.Close >= df.Open, "#26a69a", "#ef5350")
@@ -210,6 +213,43 @@ def build_swing_chart(df, flags, criteria, title, setups=("pullback", "breakout"
     fig.update_xaxes(rangebreaks=cu.time_rangebreaks(df.index))
     fig.update_yaxes(title_text="Price", row=1, col=1)
     return fig
+
+
+def add_range_cone(fig, cone, x, row=1):
+    """Shade the likely range for the next few weeks to the right of the last candle (not a prediction)."""
+    import plotly.graph_objects as go
+
+    fx = cu.plot_x(cone["dates"])
+    x0, p0 = x[-1], cone["price"]
+    xs = [x0] + list(fx)
+
+    def ys(a):
+        return [p0] + [float(v) for v in a]
+
+    tips = []
+    for t in range(cone["horizon"]):
+        tips.append(
+            f"<b>Day {t + 1} from now</b> ({fx[t]:%b %d})<br>"
+            f"Usually (about 2 in 3 times): {cone['lo68'][t]:.2f} to {cone['hi68'][t]:.2f}<br>"
+            f"Almost always (about 19 in 20): {cone['lo95'][t]:.2f} to {cone['hi95'][t]:.2f}<br>"
+            "<i>A range of what is normal, not a prediction.</i>")
+    tips = [""] + tips
+
+    fill_o, fill_i = "rgba(41,182,246,0.10)", "rgba(41,182,246,0.22)"
+    for name, hi, lo, fc, w in (("Wider range (about 19 in 20)", cone["hi95"], cone["lo95"], fill_o, 0.6),
+                                ("Likely range (about 2 in 3)", cone["hi68"], cone["lo68"], fill_i, 1.0)):
+        fig.add_trace(go.Scatter(x=xs, y=ys(hi), mode="lines", name=name, legendgroup=name,
+                                 line=dict(width=w, color="rgba(41,182,246,0.55)"),
+                                 hovertext=tips, hoverinfo="text"), row=row, col=1)
+        fig.add_trace(go.Scatter(x=xs, y=ys(lo), mode="lines", legendgroup=name, showlegend=False,
+                                 line=dict(width=w, color="rgba(41,182,246,0.55)"), fill="tonexty", fillcolor=fc,
+                                 hovertext=tips, hoverinfo="text"), row=row, col=1)
+    fig.add_trace(go.Scatter(x=xs, y=ys(cone["mid"]), mode="lines", name="Today's price (flat)", showlegend=False,
+                             line=dict(width=1, dash="dot", color="rgba(255,255,255,0.45)"), hoverinfo="skip"),
+                  row=row, col=1)
+    for val, anchor in ((cone["hi68"][-1], "bottom"), (cone["lo68"][-1], "top")):
+        fig.add_annotation(x=fx[-1], y=float(val), text=f"{val:.2f}", showarrow=False, xanchor="left",
+                           yanchor=anchor, font=dict(size=11, color="#81d4fa"), row=row, col=1)
 
 
 def current_swing_read(df, flags, criteria, p=None, plain=False):

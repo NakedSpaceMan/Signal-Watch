@@ -152,6 +152,11 @@ GLOSSARY = [
     ("R and Avg R", "R is the amount you planned to risk on a trade. +2R means you made twice that; -1R means you lost it. "
                     "Avg R is the average result per trade in those units. Above 0 means the rules made money after costs. "
                     "A small positive number repeated many times is how swing trading builds up."),
+    ("Likely range (the shaded cone)", "On the swing chart, the shaded area to the right of the last candle shows where the stock "
+                                       "could plausibly be over the next 15 trading days, based on how much it has been moving. "
+                                       "The darker band is the usual range (about 2 times out of 3); the lighter band is almost "
+                                       "everything (about 19 times out of 20). It does NOT predict direction, and earnings or big "
+                                       "news can break through it. Use it to judge whether a stop is too tight or a target is a long shot."),
     ("Profit factor", "Total money won divided by total money lost. Above 1.0 means winners outweighed losers; 1.3 or more is decent."),
     ("Max drawdown", "The worst losing stretch: how far your running total fell from its best point. It shows how rough a bad "
                      "patch can feel, so you can plan for it."),
