@@ -467,6 +467,10 @@ def show_alert_banner():
                        "They do not replace stop orders at your broker.")
 
 
+STRETCH_ROOM = 1.6                                   # target more than 1.6x the usual 15-day move = a stretch
+WEATHER_MIN_SCORE = {"Sunny": 0, "Partly cloudy": 50, "Stormy": 65}   # weaker market, pickier about setups
+
+
 @st.cache_data(ttl=900, show_spinner=False)
 def cached_weather():
     try:
@@ -626,7 +630,8 @@ def show_plan(plan, info, acct):
 
 
 @st.fragment(run_every=scan_minutes * 60 if scan_auto else None)
-def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, acct, hide_nofit, sort_by):
+def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, acct, hide_nofit, sort_by,
+                 hide_stretch=False, weather_gate=False):
     due = scan_auto and (time.time() - st.session_state.get("scan_ts", 0) >= scan_minutes * 60 - 2)
     clicked = st.button("Run scan", key="run_scan")
     if clicked or due:
@@ -670,6 +675,24 @@ def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, 
                    f"for '{PRESET_SHORT[preset]}'.")
     if only_buy and not df.empty:
         df = df[df["Signal"].str.startswith("BUY")]
+    notes = []
+    if ran_preset == SWING and not df.empty and "Score" in df.columns:
+        if hide_stretch and "Room x" in df.columns:
+            keep = ~(df["Room x"] > STRETCH_ROOM)
+            if (~keep).any():
+                notes.append(f"{int((~keep).sum())} hidden because the target is a stretch for the stock (Room x above {STRETCH_ROOM:g})")
+            df = df[keep]
+        if weather_gate:
+            w = cached_weather()
+            need = WEATHER_MIN_SCORE.get(w["label"], 0) if w else 0
+            if need:
+                keep = ~(df["Score"] < need)
+                if (~keep).any():
+                    notes.append(f"{int((~keep).sum())} hidden because the market is {w['label'].lower()}, so only scores of "
+                                 f"{need} or more are shown")
+                df = df[keep]
+    if notes:
+        st.caption("Filters: " + "; ".join(notes) + ". Untick the boxes under the scan settings to see everything.")
     sized, plan, info = sc.size_positions(df, acct)
     if info["enabled"]:
         df = sized
@@ -767,6 +790,16 @@ with tab_scan:
                  MOMENTUM: ["Rel Vol", "Change %", "Volume"]}[preset]
     sort_by = o4.selectbox("Sort by", ["Quality score (default)" if preset == SWING else "Signal rank (default)"] + sort_cols)
 
+    hide_stretch = weather_gate = False
+    if preset == SWING:
+        g1, g2 = st.columns(2)
+        hide_stretch = g1.checkbox("Hide setups whose target is a stretch", value=True,
+                                   help=f"Hides results where the target is more than {STRETCH_ROOM:g} times the stock's usual "
+                                        "15-day move (Room x column). Those targets are often not reached before time runs out.")
+        weather_gate = g2.checkbox("Be pickier when the market is weak", value=True,
+                                   help="Partly cloudy market: only scores of 50 or more. Stormy: 65 or more. Sunny: no change. "
+                                        "Swing setups fail more often when the whole market is falling.")
+
     wl = store.watchlists()
     w1, w2 = st.columns(2)
     chosen_lists = w1.multiselect("Saved watchlists to scan", list(wl))
@@ -797,7 +830,8 @@ with tab_scan:
     acct = make_account(pct_stop=(m_stop if preset == MOMENTUM else 0.0))
     st.caption(f"Results are ranked by the current signal on {'daily' if preset == SWING else interval} bars. "
                "Sizing uses your Portfolio holdings, cash and open risk.")
-    scanner_view(preset, criteria, symbols, also_market, only_buy, int(recent_bars), acct, hide_nofit, sort_by)
+    scanner_view(preset, criteria, symbols, also_market, only_buy, int(recent_bars), acct, hide_nofit, sort_by,
+                 hide_stretch, weather_gate)
 
 
 # ====================================================================== CHART TAB

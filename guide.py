@@ -187,7 +187,9 @@ GLOSSARY = [
                               "before (30%), whether the target sits inside the stock's usual 15-day range (25%), whether the stock "
                               "has been beating the market (20%), trend strength (15%) and volume (10%). The weights are a "
                               "starting guess, not proven. In the Backtest tab, 'Does the quality score actually help?' tests it on "
-                              "past trades and tells you plainly if the answer is no."),
+                              "past trades and tells you plainly if the answer is no. Two filters under the scan settings are on by default: "
+                              "one hides setups whose target is a stretch for the stock, and one asks for a higher Score when the "
+                              "market weather is Partly cloudy (50+) or Stormy (65+). Untick them to see everything."),
     ("Profit factor", "Total money won divided by total money lost. Above 1.0 means winners outweighed losers; 1.3 or more is decent."),
     ("Max drawdown", "The worst losing stretch: how far your running total fell from its best point. It shows how rough a bad "
                      "patch can feel, so you can plan for it."),
