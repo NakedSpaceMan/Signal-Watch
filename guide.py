@@ -119,7 +119,23 @@ SIDEBAR = [
 ]
 
 GLOSSARY = [
-    ("EMA", "An average of recent prices that favors the latest ones. The app uses the 9, 20 and 200 EMA, like the Legend chart."),
+    ("EMA", "Exponential moving average: a smooth line showing the average price over the last N days, giving more weight to the "
+            "most recent days so it reacts faster than a plain average. The number is how many days it looks back, and the "
+            "chart draws three of them (each on a different timescale):\n\n"
+            "- **9 EMA (blue): the short-term line.** About the last two weeks. It hugs the price and shows the stock's "
+            "current momentum. Price above it means buyers are in control right now; price falling below it is an early "
+            "sign of weakening.\n"
+            "- **20 EMA (orange): the swing-trading line.** About the last month. Healthy uptrends often dip down to it "
+            "and bounce, which is why the scanner's Pullback setup looks for price near it. A stock holding above it has a "
+            "steady trend; losing it can mean the move is fading.\n"
+            "- **200 EMA (purple): the long-term trend line.** About the last year. It shows the big picture. Price above it "
+            "means the stock is in a long-term uptrend; below it, a downtrend. The scanner only suggests swing setups "
+            "when price is above it and the 20 EMA is above it too, because it is easier to trade with the long-term "
+            "tide than against it.\n\n"
+            "Rule of thumb: the shorter the number, the faster the line moves and the more it jumps around; the longer "
+            "the number, the slower and steadier it is. When a short line crosses above a longer one, momentum is "
+            "turning up. When it crosses below, momentum is turning down. These lines describe the past and can lag, so "
+            "they work best as context, not as a prediction."),
     ("ATR", "Average True Range: how much the stock normally moves in a day. Used to place stops sensibly."),
     ("RSI", "A 0 to 100 mood gauge. Above 70 = very excited buying; below 30 = heavy selling."),
     ("R", "Your planned risk on a trade. +2R means you made twice what you risked; -1R means you lost what you planned to."),
