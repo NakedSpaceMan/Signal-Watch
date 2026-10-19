@@ -640,7 +640,7 @@ def add_to_portfolio_ui(df, plan, preset, acct, info):
                           help="Starts at the size in the combined plan (or the biggest position that fits your limits). Whole shares only, because Robinhood stop orders need them.")
     fill = b2.number_input("Price paid ($)", min_value=0.0, step=0.01, value=round(px, 2), format="%.2f", key=f"add_px_{sym}",
                            help="The scan's price. Change it to what you actually paid.")
-    b3.markdown(f"Stop **{'none' if stop is None else f'${stop:,.2f}'}**  ·  Target **{'none' if target is None else f'${target:,.2f}'}**")
+    b3.markdown(esc_md(f"Stop **{'none' if stop is None else f'${stop:,.2f}'}**  ·  Target **{'none' if target is None else f'${target:,.2f}'}**"))
     if sym in set(acct.held_symbols):
         st.warning(f"You already hold {sym}. This will add to that position.")
     if st.button(f"Add {sym} to my Portfolio as bought", key="add_to_portfolio", disabled=qty <= 0 or fill <= 0):
@@ -653,7 +653,7 @@ def add_to_portfolio_ui(df, plan, preset, acct, info):
         except ValueError as e:
             st.error(str(e))
     if st.session_state.get("_added_msg"):
-        st.success(st.session_state.pop("_added_msg"))
+        st.success(esc_md(st.session_state.pop("_added_msg")))
 
 
 def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, acct, hide_nofit, sort_by,
