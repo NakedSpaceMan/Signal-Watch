@@ -52,7 +52,7 @@ def score_from_parts(p):
     return round(100 * sum(WEIGHTS[k] * v for k, v in have.items()) / w, 0)
 
 
-def explain(p, raw):
+def explain(p, raw, bench="SPY"):
     """Plain-English reasons, best first, mentioning the weak spot if there is one."""
     good, weak = [], []
     if p["past"] is not None:
@@ -63,8 +63,8 @@ def explain(p, raw):
             "target inside the usual range" if p["room"] >= 0.8 else "target is a stretch for this stock")
     if p["rs"] is not None:
         (good if p["rs"] >= 0.6 else weak if p["rs"] <= 0.25 else []).append(
-            f"beating the market ({raw['rs'] * 100:+.0f}% vs SPY over 3 months)" if p["rs"] >= 0.6
-            else f"lagging the market ({raw['rs'] * 100:+.0f}% vs SPY over 3 months)")
+            f"beating the market ({raw['rs'] * 100:+.0f}% vs {bench} over 3 months)" if p["rs"] >= 0.6
+            else f"lagging the market ({raw['rs'] * 100:+.0f}% vs {bench} over 3 months)")
     if p["trend"] is not None and p["trend"] >= 0.7:
         good.append("strong uptrend")
     if p["vol"] is not None:

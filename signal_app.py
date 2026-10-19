@@ -42,6 +42,32 @@ import swing_chart as swc
 st.set_page_config(page_title="Signal Watch", layout="wide")
 
 
+# ---- start screen: pick Stocks or Crypto. Each is its own environment with its own trades and settings.
+if st.session_state.get("app_mode") is None:
+    st.title("Signal Watch")
+    st.markdown("What do you want to work on?")
+    s1, s2 = st.columns(2)
+    with s1:
+        st.subheader("Stocks")
+        st.write("US stocks during market hours. Scanner, charts, portfolio, backtest, lessons.")
+        if st.button("Open Stocks", type="primary", key="mode_stocks", use_container_width=True):
+            st.session_state["app_mode"] = "stocks"
+            st.rerun()
+    with s2:
+        st.subheader("Crypto")
+        st.write("Coins that trade 24/7, weekends included. Same ideas, adapted: bigger moves, wider stops, Bitcoin as the market gauge.")
+        if st.button("Open Crypto", type="primary", key="mode_crypto", use_container_width=True):
+            st.session_state["app_mode"] = "crypto"
+            st.rerun()
+    st.caption("Your stock and crypto trades and settings are kept separately. You can switch from the sidebar at any time. "
+               "Not financial advice.")
+    st.stop()
+if st.session_state.get("app_mode") == "crypto":
+    import crypto_app
+    crypto_app.run()
+    st.stop()
+
+
 SETTINGS_FILE = Path(__file__).with_name("signal_settings.json")
 PRACTICE_DB = lg.DB_PATH.with_name("signal_practice.db")
 
@@ -61,6 +87,12 @@ def get_store(path):
     return lg.Store(path)
 
 
+if st.sidebar.button("Switch to Crypto", key="switch_crypto"):
+    st.session_state["app_mode"] = "crypto"
+    st.rerun()
+if st.sidebar.button("← Back to start screen", key="back_start"):
+    st.session_state["app_mode"] = None
+    st.rerun()
 st.sidebar.header("Mode")
 practice = st.sidebar.checkbox("Practice mode (fake money)", value=bool(_saved.get("practice", False)),
                                help="A separate practice ledger, kept apart from your real trades. Good for "

@@ -31,11 +31,14 @@ def plot_x(index):
     return idx
 
 
-def time_rangebreaks(index):
+def time_rangebreaks(index, always_open=False):
     """
     Plotly rangebreaks that remove weekends, market holidays (days with no
     bars) and, for intraday data, the hours outside the trading session.
+    always_open=True (crypto trades 24/7) hides nothing.
     """
+    if always_open:
+        return []
     tz = getattr(pd.DatetimeIndex(index), "tz", None)
     idx = plot_x(index)
     breaks = [dict(bounds=["sat", "mon"])]

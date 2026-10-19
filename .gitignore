@@ -10,3 +10,6 @@ __pycache__/
 # OS files
 .DS_Store
 Thumbs.db
+crypto_settings.json
+signal_crypto.db
+crypto_symbols.json
