@@ -17,6 +17,7 @@ import streamlit as st
 
 import backtest as bt
 import crypto as cr
+import shared as sh
 import forecast as fc
 import ledger as lg
 import learn
@@ -295,6 +296,16 @@ def scanner_tab(acct, risk_dollars, max_pos, max_new, stop_mult, rr, weather, in
         if lb is not None and pd.Timestamp(lb).weekday() != cr.WW_DAY:
             st.caption(f"Heads up: the latest finished candle is {pd.Timestamp(lb):%A}, not Friday, so these are previews, not Friday-night picks.")
     cash = max(acct - invested, 0.0)
+    s_acct, s_reserve = sh.stock_account()
+    s_mv, s_n = sh.stock_held(cached_prices)
+    if s_acct > 0:                       # one Robinhood account: stocks you hold (maybe for weeks) tie up the same cash
+        shared_cash = max(s_acct - s_mv - invested - s_reserve, 0.0)
+        if shared_cash < cash:
+            st.info(f"You hold {money(s_mv)} in stocks ({s_n} position{'s' if s_n != 1 else ''}), so only {money(shared_cash)} of your "
+                    f"account is free cash. The plan below uses that, not the full {money(cash)} crypto budget.")
+            cash = shared_cash
+    elif s_mv > 0:
+        st.caption(f"You hold {money(s_mv)} in stocks. Set your account value on the stocks side so crypto can subtract it from cash.")
     plan, left = [], cash
     for _, r in df.iterrows():
         if len(plan) >= max_new:
