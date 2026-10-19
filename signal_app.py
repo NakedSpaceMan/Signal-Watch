@@ -30,6 +30,7 @@ import pandas as pd
 import streamlit as st
 
 import backtest as bt
+import chart_utils as cu
 import coach
 import forecast as fc
 import guide
@@ -1168,10 +1169,13 @@ def chart_view(mode):
                                key="swing_outcomes")
         show_cone = st.checkbox("Show the likely range for the next 15 trading days (shaded, right of the last candle)",
                                 value=True, key="swing_cone")
-        ranges = {"1 month": 21, "3 months": 63, "6 months": 126, "1 year": 252, "2 years": 504}
-        rng_pick = st.radio("Time range (each candle is one trading day)", list(ranges), index=1,
+        ranges = {"1 day": 1, "1 week": 5, "1 month": 21, "3 months": 63, "6 months": 126, "1 year": 252, "2 years": 504}
+        rng_pick = st.radio("Time range (each candle is one trading day)", list(ranges), index=list(ranges).index("3 months"),
                             horizontal=True, key="swing_range")
         n = ranges[rng_pick]
+        if n <= 5:
+            st.caption(f"{'One candle' if n == 1 else 'Five candles'} is all a {rng_pick} view of daily data can show. "
+                       "For price action inside a single day, switch to Intraday signals in the sidebar.")
         last = df.iloc[-1]
         atr = float(flags["atr"].iloc[-1])
         sugg = None
@@ -1187,7 +1191,8 @@ def chart_view(mode):
                 cone = None
         fig = swc.build_swing_chart(df.tail(n), flags.tail(n), crit, f"{ticker} - swing setups (daily)",
                                     setups=tuple(s.lower() for s in shown), opts={"volume": opt_volume, "sr": opt_sr, "beginner": beginner},
-                                    overlay=overlay, show_outcomes=outcomes, cone=cone)
+                                    overlay=overlay, show_outcomes=outcomes, cone=cone,
+                                    sr=cu.support_resistance(df.tail(max(n, 63))) if opt_sr else None)
         st.caption("The swing chart is always daily, so the Bar size setting in the sidebar doesn't apply here. "
                    "Pick a bar size or switch to Intraday signals to use it.")
         st.caption("Hover a marker to see why the scanner would have flagged that day, the levels it would have "
