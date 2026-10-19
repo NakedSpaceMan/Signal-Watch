@@ -892,11 +892,24 @@ def _rgba(hexcolor, a):
 
 
 def quiz_stop_options(chart, rng_seed):
-    """Three candidate stop prices (shuffled A/B/C) and which letter is the sensible one."""
+    """Three candidate stop prices (shuffled A/B/C) and which letter is the sensible one.
+
+    The two wrong lines vary: each is either too tight (0.3-0.7 of the real risk) or too far (1.8-3.6 times), so the
+    right one is not always 'the middle one' and has to be judged from the chart.
+    """
     p = chart["plan"]
+    r = np.random.default_rng(int(rng_seed) + 12345)
     risk = p["entry"] - p["stop"]
-    cands = [("good", p["stop"]), ("tight", p["entry"] - 0.3 * risk), ("far", p["entry"] - 3.2 * risk)]
-    order = list(np.random.default_rng(rng_seed).permutation(3))
+    decoys = []
+    for _ in range(2):
+        if r.random() < 0.5:
+            decoys.append(("tight", p["entry"] - float(r.uniform(0.3, 0.7)) * risk))
+        else:
+            decoys.append(("far", max(p["entry"] - float(r.uniform(1.8, 3.6)) * risk, p["entry"] * 0.3)))
+    if abs(decoys[0][1] - decoys[1][1]) < 0.12 * risk:          # two near-identical decoys would be confusing
+        decoys[1] = (decoys[1][0], decoys[1][1] + (0.2 if decoys[1][0] == "tight" else -0.5) * risk)
+    cands = [("good", p["stop"])] + decoys
+    order = list(r.permutation(3))
     letters = ["A", "B", "C"]
     lines = [(letters[i], cands[j][1]) for i, j in enumerate(order)]
     answer = letters[[cands[j][0] for j in order].index("good")]

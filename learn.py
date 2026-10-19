@@ -376,6 +376,13 @@ def _lesson_view(key, risk_dollars):
     _quiz(key, L)
 
 
+def _shuffled(options, seed):
+    """Same answers, in a different order each new quiz chart, so the right one isn't always in the same slot."""
+    opts = list(options)
+    random.Random(int(seed) * 31 + len(opts)).shuffle(opts)
+    return opts
+
+
 def _quiz(key, L):
     ss = st.session_state
     qk = f"lrn_qseed_{key}"
@@ -396,7 +403,7 @@ def _quiz(key, L):
                 picks.append(st.radio("Imagine you buy tomorrow's open. Which dashed line is the best place for your stop?",
                                       ["A", "B", "C"], index=None, key=f"lrn_qs_{key}_{qseed}", horizontal=True))
             for i, q in enumerate(L["quiz"]):
-                picks.append(st.radio(q["q"], q["options"], index=None, key=f"lrn_q{i}_{key}_{qseed}"))
+                picks.append(st.radio(q["q"], _shuffled(q["options"], qseed + i), index=None, key=f"lrn_q{i}_{key}_{qseed}"))
             done = st.form_submit_button("Check my answers")
         if done:
             score, total, idx = 0, 0, 0
