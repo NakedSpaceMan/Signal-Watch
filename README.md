@@ -20,6 +20,14 @@ When you open the app, the start screen asks whether you want **Stocks** or **Cr
 - **Beginner mode:** plain-English ("explain like I'm five") text everywhere.
 - **Guide tab:** what every box in the sidebar does.
 
+### One shared account
+
+Stocks and crypto draw from the same pool of money.
+
+- The account value is a single number, shared by both sides.
+- What you hold on one side is subtracted from the other side's free cash (`shared.py`).
+- The crypto sidebar shows your **Buying power**, with a hover note on where the rest of your money is.
+
 ## Stocks
 
 - **Chart tab:** swing (daily) chart and live intraday chart, hover-to-learn markers, Buy / Hold / Sell verdict with reasons,
@@ -44,14 +52,6 @@ Crypto is its own environment for coins on Robinhood's list, with the same tabs 
 - **Market weather:** reads Bitcoin's trend (Sunny, Partly cloudy or Stormy) and gets pickier when it is weak.
 - **Fee aware:** results show "R after fees", using Robinhood's lowest-tier crypto fees as the default.
 - **Its own files:** trades in `signal_crypto.db` and settings in `crypto_settings.json`, apart from your stocks.
-
-### One shared account
-
-Stocks and crypto draw from the same pool of money.
-
-- The account value is a single number, shared by both sides.
-- What you hold on one side is subtracted from the other side's free cash (`shared.py`).
-- The crypto sidebar shows your **Buying power**, with a hover note on where the rest of your money is.
 
 ### Weekend Warrior
 
