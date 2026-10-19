@@ -173,20 +173,55 @@ def money_egg():
     <div id="sm">♪ A nod to the Pet Shop Boys' &ldquo;Opportunities (Let's Make Lots of Money)&rdquo;</div></div>
 </div>
 <script>
-let ctx = null;
-document.getElementById("bill").onclick = () => {
+// A bright two-note "ka-ching". Plays a small generated WAV (works in Safari too); falls back to Web Audio.
+let audio = null, ctx = null;
+
+function makeWav() {
+  const sr = 22050, n = Math.floor(sr * 0.65), pcm = new Int16Array(n);
+  [[1318.5, 0, 0.12], [1760, 0.11, 0.45]].forEach(([f, d, len]) => {
+    const s0 = Math.floor(sr * d), s1 = Math.min(n, Math.floor(sr * (d + len + 0.05)));
+    for (let i = s0; i < s1; i++) {
+      const t = (i - s0) / sr, ph = (t * f) % 1;
+      const env = Math.min(1, t / 0.01) * Math.exp(-t * 7);
+      pcm[i] += Math.round((4 * Math.abs(ph - 0.5) - 1) * env * 0.25 * 32767);   // triangle wave
+    }
+  });
+  const buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+  const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  str(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); str(8, "WAVE"); str(12, "fmt ");
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  str(36, "data"); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) v.setInt16(44 + i * 2, pcm[i], true);
+  return new Blob([buf], {type: "audio/wav"});
+}
+
+function webAudioFallback() {
   try {
-    ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
-    const t = ctx.currentTime;
-    [[1318.5, 0, .12], [1760, .11, .45]].forEach(([f, d, len]) => {      // a bright two-note "ka-ching"
-      const o = ctx.createOscillator(), g = ctx.createGain();
-      o.type = "triangle"; o.frequency.value = f;
-      g.gain.setValueAtTime(0, t + d); g.gain.linearRampToValueAtTime(.25, t + d + .01);
-      g.gain.exponentialRampToValueAtTime(.001, t + d + len);
-      o.connect(g); g.connect(ctx.destination); o.start(t + d); o.stop(t + d + len + .05);
-    });
+    const AC = window.AudioContext || window.webkitAudioContext;
+    ctx = ctx || new AC();
+    const go = () => {
+      const t = ctx.currentTime;
+      [[1318.5, 0, .12], [1760, .11, .45]].forEach(([f, d, len]) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = "triangle"; o.frequency.value = f;
+        g.gain.setValueAtTime(0, t + d); g.gain.linearRampToValueAtTime(.25, t + d + .01);
+        g.gain.exponentialRampToValueAtTime(.001, t + d + len);
+        o.connect(g); g.connect(ctx.destination); o.start(t + d); o.stop(t + d + len + .05);
+      });
+    };
+    if (ctx.state === "suspended") ctx.resume().then(go); else go();
   } catch (e) {}
-};
+}
+
+document.getElementById("bill").addEventListener("click", () => {
+  try {
+    if (!audio) audio = new Audio(URL.createObjectURL(makeWav()));
+    audio.currentTime = 0;
+    const p = audio.play();
+    if (p && p.catch) p.catch(webAudioFallback);
+  } catch (e) { webAudioFallback(); }
+});
 </script>""", height=150)
 
 
