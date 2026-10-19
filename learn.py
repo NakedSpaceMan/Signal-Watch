@@ -539,6 +539,29 @@ def _explain(chart, res):
     return lines
 
 
+def _process_note(chart, res):
+    """For a trade that didn't make money: praise a sound stop (and target) so a loss isn't read as a mistake."""
+    out, pl, p = res["out"], res["plan"], chart["plan"]
+    if out["r"] > 0:
+        return None
+    entry = pl["entry"]
+    risk_u, risk_t = entry - pl["stop"], entry - p["stop"]
+    reward_u, reward_t = pl["target"] - entry, p["target"] - entry
+    stop_ok = 0.8 * risk_t <= risk_u <= 1.6 * risk_t
+    target_ok = 0.7 * reward_t <= reward_u <= 1.5 * reward_t
+    if not stop_ok:
+        return None
+    lost = out["reason"].startswith("Stop")
+    base = ("While you didn't make money this time, you set your stop in a sensible place" if not target_ok else
+            "While you didn't make money this time, your stop and your target were both sensible")
+    what = ("Your loss stayed small and planned, which is exactly what a stop is for. " if lost else
+            "Neither level was hit, and you got out with a small result. ")
+    tail = ("Good trades lose sometimes; even a well-planned setup fails about half the time. Judge the plan, not the outcome. "
+            "Do this over and over and the winners pay for the losers.")
+    extra = "" if target_ok else " Your target was a bit off (see the Target check above), but the stop did its job."
+    return f"{base}. {what}{tail}{extra}"
+
+
 # ------------------------------------------------------------------ practice mode
 def _score():
     return st.session_state.setdefault("lrn_score", dict(trades=0, wins=0, r=0.0, skips=0, good_skips=0, hints=0))
@@ -674,6 +697,10 @@ def _practice_view(risk_dollars):
                        f"({(pl['target'] - pl['entry']) / (pl['entry'] - pl['stop']):.1f} times your risk)."))
         for line in _explain(chart, res):
             st.markdown("- " + _md(line))
+        if kind != "none":
+            note = _process_note(chart, res)
+            if note:
+                st.success(_md(note))
     else:
         _plot(lc.build_figure(chart, markup=False, reveal=True, show_plan=False, cone=cone), f"lrn_pres_{seed}")
         st.markdown("**You skipped.**")
