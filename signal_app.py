@@ -245,6 +245,21 @@ def fetch(tkr, period, intv):
     return so.load_data(tkr, period, intv)
 
 
+@st.cache_data(ttl=900, show_spinner=False)
+def cached_history(symbols, start):
+    """Daily closes since `start` for each symbol (used for the Portfolio growth chart). Symbols that fail are left out."""
+    import yfinance as yf
+    out = {}
+    for s in symbols:
+        try:
+            h = yf.Ticker(s).history(start=start, interval="1d", auto_adjust=True)
+            if len(h):
+                out[s] = h["Close"]
+        except Exception:
+            pass
+    return out
+
+
 @st.cache_data(ttl=60, show_spinner=False)
 def cached_prices(symbols):
     try:
@@ -1124,6 +1139,51 @@ GLOSSARY = [
 ]
 
 
+def show_growth(tx):
+    """Profit/loss since your first trade, day by day: finished sells plus what you still hold at each day's close."""
+    st.subheader("Growth")
+    if tx.empty:
+        st.caption("Record your first trade and a profit-and-loss chart will appear here.")
+        return
+    import plotly.graph_objects as go
+    syms = tuple(sorted(set(tx["symbol"])))
+    first = pd.to_datetime(tx["ts"]).min().normalize()
+    hist = cached_history(syms, (first - pd.Timedelta(days=7)).strftime("%Y-%m-%d"))
+    curve = lg.equity_curve(tx, hist)
+    if curve.empty:
+        st.caption("Nothing to chart yet.")
+        return
+    missing = [s for s in syms if s not in hist]
+    now_tot, now_real, now_unreal = (float(curve[c].iloc[-1]) for c in ("Total", "Realized", "Unrealized"))
+    g1, g2, g3 = st.columns(3)
+    g1.metric("Total gain / loss", money(now_tot),
+              help="Everything you have made or lost since your first trade: money from finished sells (after fees) plus the "
+                   "paper gain or loss on what you still hold.")
+    g2.metric("Locked in (sold)", money(now_real), help="Profit or loss from stocks you have already sold, after fees.")
+    g3.metric("Still open", money(now_unreal), help="Paper gain or loss on stocks you still hold, at the latest close. It changes until you sell.")
+    color = "#26a69a" if now_tot >= 0 else "#ef5350"
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=curve.index, y=curve["Total"], name="Total gain / loss", mode="lines+markers" if len(curve) < 15 else "lines",
+                             line=dict(color=color, width=2.5), fill="tozeroy",
+                             fillcolor="rgba(38,166,154,0.18)" if now_tot >= 0 else "rgba(239,83,80,0.18)",
+                             hovertemplate="%{x|%b %d}<br>Total %{y:+,.2f}<extra></extra>"))
+    fig.add_trace(go.Scatter(x=curve.index, y=curve["Realized"], name="Locked in (sold)", mode="lines",
+                             line=dict(color="#9e9e9e", width=1.3, dash="dot"),
+                             hovertemplate="%{x|%b %d}<br>Locked in %{y:+,.2f}<extra></extra>"))
+    fig.add_hline(y=0, line=dict(color="gray", width=1))
+    fig.update_layout(template="plotly_dark", height=340, margin=dict(l=10, r=10, t=30, b=10), hovermode="x unified",
+                      yaxis_title="Profit / loss ($)", legend=dict(orientation="h", y=1.12), uirevision="growth")
+    fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
+    show_chart(fig, "growth_chart")
+    note = ("Built from the trades you recorded, valued at each day's closing price. It does not read your Robinhood balance, "
+            "so deposits and withdrawals are not included. Prices come from Yahoo and can be delayed.")
+    if len(curve) < 3:
+        note = "Only a day or two of history so far, so the line is short. " + note
+    if missing:
+        note += " No price history found for " + ", ".join(missing) + ", so those are counted at what you paid until sold."
+    st.caption(esc_md(note))
+
+
 def mark_weekends(fig, index):
     """Dotted vertical line (labelled Weekend) wherever the chart skips over a Saturday and Sunday."""
     try:
@@ -1518,6 +1578,8 @@ with tab_port:
                     st.rerun()
                 except ValueError as e:
                     st.error(str(e))
+
+    show_growth(tx_all)
 
     st.subheader("Finished trades")
     if pos["closed"].empty:

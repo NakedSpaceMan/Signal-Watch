@@ -415,6 +415,66 @@ def price_alert_hits(alerts_df, prices):
     return hits
 
 
+def equity_curve(tx, history, today=None):
+    """
+    Daily profit/loss since your first trade: realized (money from finished sells, after fees) plus unrealized
+    (what you still hold, valued at each day's close). `history` maps symbol -> Series of daily closes.
+    A symbol with no price history is valued at what you paid, so it adds nothing until it is sold.
+    Returns a DataFrame indexed by date with columns Realized, Unrealized, Total.
+    """
+    cols = ["Realized", "Unrealized", "Total"]
+    if tx is None or tx.empty:
+        return pd.DataFrame(columns=cols)
+    t = tx[tx["side"].isin(["BUY", "SELL"])].copy()
+    if t.empty:
+        return pd.DataFrame(columns=cols)
+    t["ts"] = pd.to_datetime(t["ts"])
+    t = t.sort_values(["ts", "id"] if "id" in t.columns else ["ts"])
+    start = t["ts"].min().normalize()
+    end = pd.Timestamp(today or pd.Timestamp.now()).normalize()
+    days = pd.bdate_range(start, end)
+    if len(days) == 0 or days[-1] < end:       # weekend/holiday: still end on today
+        days = days.append(pd.DatetimeIndex([end])) if len(days) == 0 or days[-1] != end else days
+    px = {}
+    for sym, ser in (history or {}).items():
+        ser = pd.Series(ser).dropna()
+        if ser.empty:
+            continue
+        idx = pd.DatetimeIndex(ser.index)
+        if idx.tz is not None:
+            idx = idx.tz_localize(None)
+        ser.index = idx.normalize()
+        ser = ser[~ser.index.duplicated(keep="last")]
+        px[sym.upper()] = ser.reindex(ser.index.union(days)).ffill()
+    rows, k, n = [], 0, len(t)
+    recs = list(t.itertuples(index=False))
+    qty, cost, realized = {}, {}, 0.0
+    for d in days:
+        eod = d + pd.Timedelta(days=1)
+        while k < n and pd.Timestamp(recs[k].ts) < eod:
+            r = recs[k]; k += 1
+            q, c = qty.get(r.symbol, 0.0), cost.get(r.symbol, 0.0)
+            if r.side == "BUY":
+                qty[r.symbol], cost[r.symbol] = q + r.qty, c + r.qty * r.price + r.fees
+            elif q > 1e-12:
+                sold = min(r.qty, q)
+                avg = c / q
+                realized += sold * (r.price - avg) - r.fees
+                qty[r.symbol], cost[r.symbol] = q - sold, c - avg * sold
+        unreal = 0.0
+        for sym, q in qty.items():
+            if q <= 1e-12:
+                continue
+            ser = px.get(sym)
+            price = ser.get(d) if ser is not None else None
+            if price is None or pd.isna(price):
+                continue                        # no price: valued at cost
+            unreal += q * float(price) - cost[sym]
+        rows.append((d, realized, unreal, realized + unreal))
+    out = pd.DataFrame(rows, columns=["Date"] + cols).set_index("Date")
+    return out
+
+
 def fetch_prices(symbols):
     """Latest prices from Yahoo (can be delayed). Missing symbols are simply left out."""
     import yfinance as yf

@@ -30,7 +30,7 @@ TABS = [
               "recent beats and misses, and how the stock moved around past reports) and a News check: recent Yahoo headlines tagged "
               "Good / Bad / Mixed / Neutral, plus a Copy for Claude button and an Open Claude button so you can have Claude explain "
               "the news and then set your own news call."),
-    ("Portfolio", "What you own, your profit and loss, stop-raising suggestions, a place to record trades, finished "
+    ("Portfolio", "What you own, your profit and loss (with a growth chart of your gain or loss over time), stop-raising suggestions, a place to record trades, finished "
                   "trades and price alerts."),
     ("Weekly review", "A look back at the week with praise for good habits and one thing to improve. Add a lesson "
                       "to each finished trade."),
