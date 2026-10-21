@@ -38,10 +38,21 @@ import learn
 import ledger as lg
 import scanner as sc
 import signal_overlay as so
+import yahoo_guard as yg
 import swing_chart as swc
 
 st.set_page_config(page_title="Signal Watch", layout="wide")
 
+
+@st.cache_resource(show_spinner=False)
+def _daily_library_update(day):
+    return yg.daily_update(day)
+
+
+with st.spinner("Checking for Yahoo data library updates (once a day)..."):
+    _upd_msg = _daily_library_update(str(pd.Timestamp.now().date()))
+if _upd_msg:
+    st.toast(_upd_msg)
 
 SETTINGS_FILE = Path(__file__).with_name("signal_settings.json")
 PRACTICE_DB = lg.DB_PATH.with_name("signal_practice.db")
@@ -527,7 +538,14 @@ if practice:
                 "</div>", unsafe_allow_html=True)
 show_weather_banner()
 show_alert_banner()
-if not valued.empty and valued["Price"].isna().any():
+_lim_top = yg.limited_until()
+if _lim_top:
+    st.warning(yg.limit_message(_lim_top))
+    if st.button("I've waited, try Yahoo again", key="clear_yahoo_limit"):
+        yg.clear_limit()
+        st.cache_data.clear()
+        st.rerun()
+elif not valued.empty and valued["Price"].isna().any():
     st.warning("Could not get a live price for: " + ", ".join(valued.loc[valued["Price"].isna(), "Symbol"]) +
                ". Yahoo may be rate-limiting or your yfinance is out of date. Try Rerun in a minute, or run "
                "`pip3 install -U yfinance` in Terminal. Until then those rows use your buy price and stop warnings are off.")
@@ -697,7 +715,15 @@ def add_to_portfolio_ui(df, plan, preset, acct, info):
 def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, acct, hide_nofit, sort_by,
                  hide_stretch=False, weather_gate=False):
     due = scan_auto and (time.time() - st.session_state.get("scan_ts", 0) >= scan_minutes * 60 - 2)
+    if preset in (SWING, STEADY):
+        st.info("Best time to buy from a scan: after the market closes (1:00 PM Pacific). The scan reads daily "
+                "candles, and today's candle is still forming until the close, so a setup can appear or vanish "
+                "before then. Wait for the close, run the scan again, and place the order for the next day.")
     clicked = st.button("Run scan", key="run_scan")
+    _lim = yg.limited_until()
+    if (clicked or due) and _lim:
+        clicked, due = False, False
+        st.warning(yg.limit_message(_lim))
     if clicked or due:
         with st.spinner("Scanning, then checking headlines and signals... this can take a minute or two."):
             try:
@@ -721,10 +747,14 @@ def scanner_view(preset, criteria, symbols, also_market, only_buy, recent_bars, 
             except Exception as e:
                 st.session_state["scan_res"] = None
                 st.session_state["scan_err"] = str(e)
+                yg.note_if_limited(e)
         st.session_state["scan_ts"] = time.time()
 
     if st.session_state.get("scan_err"):
-        st.error(f"Scan failed: {st.session_state['scan_err']}")
+        if yg.is_rate_limit_error(st.session_state["scan_err"]):
+            st.warning(yg.limit_message(yg.limited_until() or time.time() + yg.COOLDOWN_MINUTES * 60))
+        else:
+            st.error(f"Scan failed: {st.session_state['scan_err']}")
     res = st.session_state.get("scan_res")
     if not res:
         return

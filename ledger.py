@@ -537,17 +537,27 @@ def fetch_prices(symbols):
 
     syms = sorted(set(symbols))
     out = {}
+    try:
+        import yahoo_guard as yg
+    except Exception:
+        yg = None
+    if yg and yg.limited_until():
+        return out    # Yahoo told us to back off; don't make it worse
     for s in syms:
         px = None
         try:
             px = yf.Ticker(s).fast_info["last_price"]
-        except Exception:
+        except Exception as e:
+            if yg and yg.note_if_limited(e):
+                return out
             px = None
         if px is None or px != px or px <= 0:
             try:
                 h = yf.Ticker(s).history(period="5d", interval="1d")
                 px = float(h["Close"].dropna().iloc[-1])
-            except Exception:
+            except Exception as e:
+                if yg and yg.note_if_limited(e):
+                    return out
                 px = None
         if px and px == px and px > 0:
             out[s] = float(px)
