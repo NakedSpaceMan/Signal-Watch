@@ -1499,15 +1499,53 @@ with tab_port:
                         st.error(str(e))
 
     cA, cB = st.columns(2)
-    if cA.button("Check news & signals for my positions") and not valued.empty:
-        with st.spinner("Checking headlines, earnings dates and daily signals..."):
-            extras = {}
-            for s in valued["Symbol"]:
-                extras[s] = {"catalyst": sc.get_catalyst(s), "signal": sc.signal_summary(s, "1d")}
-            st.session_state["held_extras"] = extras
-        st.rerun()
-    if st.session_state.get("held_extras"):
-        cB.caption("Alerts above include earnings, red-flag headlines and daily SELL signals for your positions.")
+    if cA.button("Check news & signals for my positions"):
+        if valued.empty:
+            st.info("You have no open positions to check yet. Record a buy first.")
+        else:
+            with st.spinner("Checking headlines, earnings dates and daily signals..."):
+                extras = {}
+                for s_ in valued["Symbol"]:
+                    try:
+                        cat_ = sc.get_catalyst(s_)
+                    except Exception as e_:
+                        cat_ = {"headlines": [], "flags": [], "tags": [], "fresh": 0, "earnings_days": None,
+                                "news_error": str(e_)[:80]}
+                    try:
+                        sig_ = sc.signal_summary(s_, "1d")
+                    except Exception as e_:
+                        sig_ = {"label": f"Couldn't check ({str(e_)[:60]})", "reasons": []}
+                    extras[s_] = {"catalyst": cat_, "signal": sig_}
+                st.session_state["held_extras"] = extras
+                st.session_state["held_extras_time"] = datetime.now()
+            st.rerun()
+    held_x = st.session_state.get("held_extras")
+    if held_x and not valued.empty:
+        rows = []
+        for s_ in valued["Symbol"]:
+            ex = held_x.get(s_)
+            if not ex:
+                continue
+            cat_, sig_ = ex.get("catalyst") or {}, ex.get("signal") or {}
+            d_ = cat_.get("earnings_days")
+            rows.append({"Symbol": s_, "Daily signal": sig_.get("label", "-"),
+                         "Earnings": "not found" if d_ is None else ("today" if d_ == 0 else f"in {d_} day(s)"),
+                         "New headlines (48h)": cat_.get("fresh", 0),
+                         "Red flags": ", ".join(cat_.get("flags") or []) or "none",
+                         "Headline check": ("couldn't load" if cat_.get("news_error") else "ok")})
+        if rows:
+            when_ = st.session_state.get("held_extras_time")
+            st.markdown("**Latest check of your positions**" + (f" ({when_:%I:%M %p})" if when_ else ""))
+            show_table(pd.DataFrame(rows))
+            st.caption("Anything urgent (a SELL signal, close earnings, red-flag headlines) also shows in the alerts at the top "
+                       "of the page. A signal of 'No signal' or 'Building buy' means nothing needs doing. Headlines are matched by "
+                       "keywords, so always read them yourself.")
+            for s_ in valued["Symbol"]:
+                heads_ = ((held_x.get(s_) or {}).get("catalyst") or {}).get("headlines") or []
+                if heads_:
+                    with st.expander(f"{s_} headlines"):
+                        for h_ in heads_[:6]:
+                            st.markdown(esc_md(f"- {h_.get('title', '')}" + (f" ({h_['source']})" if h_.get("source") else "")))
 
     st.subheader("Record a trade")
     with st.form("trade_form"):
