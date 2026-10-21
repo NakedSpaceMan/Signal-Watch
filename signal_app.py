@@ -261,9 +261,16 @@ def cached_history(symbols, start):
 
 
 @st.cache_data(ttl=60, show_spinner=False)
+def _prices_ok(symbols):
+    got = lg.fetch_prices(list(symbols))
+    if not got:
+        raise RuntimeError("no prices")   # errors are not cached, so the next run tries again
+    return got
+
+
 def cached_prices(symbols):
     try:
-        return lg.fetch_prices(list(symbols))
+        return _prices_ok(tuple(symbols))
     except Exception:
         return {}
 
@@ -520,6 +527,10 @@ if practice:
                 "</div>", unsafe_allow_html=True)
 show_weather_banner()
 show_alert_banner()
+if not valued.empty and valued["Price"].isna().any():
+    st.warning("Could not get a live price for: " + ", ".join(valued.loc[valued["Price"].isna(), "Symbol"]) +
+               ". Yahoo may be rate-limiting or your yfinance is out of date. Try Rerun in a minute, or run "
+               "`pip3 install -U yfinance` in Terminal. Until then those rows use your buy price and stop warnings are off.")
 _hit = lg.stopped_out(valued)
 for _, _r in _hit.iterrows():
     st.error(f"Stop loss triggered: {_r['Symbol']} is at \\${_r['Price']:,.2f}, at or below your stop of "

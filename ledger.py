@@ -535,21 +535,35 @@ def fetch_prices(symbols):
     """Latest prices from Yahoo (can be delayed). Missing symbols are simply left out."""
     import yfinance as yf
 
+    syms = sorted(set(symbols))
     out = {}
-    for s in sorted(set(symbols)):
+    for s in syms:
         px = None
         try:
             px = yf.Ticker(s).fast_info["last_price"]
         except Exception:
             px = None
-        if not px:
+        if px is None or px != px or px <= 0:
             try:
                 h = yf.Ticker(s).history(period="5d", interval="1d")
-                px = float(h["Close"].iloc[-1])
+                px = float(h["Close"].dropna().iloc[-1])
             except Exception:
                 px = None
-        if px:
+        if px and px == px and px > 0:
             out[s] = float(px)
+    missing = [s for s in syms if s not in out]
+    if missing:   # last resort: one batch download for whatever is still missing
+        try:
+            d = yf.download(missing, period="5d", interval="1d", progress=False, auto_adjust=True, threads=False)
+            close = d["Close"]
+            if hasattr(close, "columns"):
+                for s in missing:
+                    if s in close.columns and close[s].dropna().size:
+                        out[s] = float(close[s].dropna().iloc[-1])
+            elif len(missing) == 1 and close.dropna().size:
+                out[missing[0]] = float(close.dropna().iloc[-1])
+        except Exception:
+            pass
     return out
 
 
