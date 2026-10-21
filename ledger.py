@@ -346,6 +346,54 @@ def stop_suggestions(valued, plain=False):
     return out
 
 
+def stop_progress(valued):
+    """
+    How close each position is to its next stop-raise (the same R steps as stop_suggestions: up 1R -> break-even,
+    2R -> lock +1R, 3R -> lock +2R). Returns a list of dicts with Symbol, Price, Entry, Gain R, Current stop,
+    Next stop, Raise at (price), Progress (0-100 or None), Ready (bool) and Status text.
+    """
+    out = []
+    if valued is None or valued.empty:
+        return out
+    for _, r in valued.iterrows():
+        s, avg, stop0, stop, price = r["Symbol"], r["Avg cost"], r["Initial stop"], r["Stop"], r.get("Price")
+        base = {"Symbol": s, "Price": None if pd.isna(price) else float(price), "Entry": float(avg), "Gain R": None,
+                "Current stop": None if pd.isna(stop) else float(stop), "Next stop": None, "Raise at": None,
+                "Progress": None, "Ready": False}
+        if pd.isna(stop0) or pd.isna(avg) or stop0 >= avg or avg <= 0:
+            out.append({**base, "Status": "Record a stop below your entry price to track progress."})
+            continue
+        if pd.isna(price):
+            out.append({**base, "Status": "No current price, so progress can't be measured right now."})
+            continue
+        risk = avg - stop0
+        gain_r = (price - avg) / risk
+        cur = 0.0 if pd.isna(stop) else float(stop)
+        base["Gain R"] = round(float(gain_r), 2)
+        step = None
+        for m in (1, 2, 3):
+            new = round(avg + (m - 1) * risk, 2 if avg + (m - 1) * risk >= 1 else 4)
+            if new > cur + 1e-9:
+                step = (m, new)
+                break
+        if step is None:
+            out.append({**base, "Progress": 100.0, "Status": "Fully protected: your stop is already at +2R or better."})
+            continue
+        m, new = step
+        trigger = avg + m * risk
+        base.update({"Next stop": new, "Raise at": round(float(trigger), 2 if trigger >= 1 else 4)})
+        if gain_r >= m and new < price * 0.995:
+            out.append({**base, "Progress": 100.0, "Ready": True,
+                        "Status": f"Time to raise your stop to {new:,.2f}."})
+            continue
+        prog = max(0.0, min(1.0, gain_r - (m - 1))) * 100
+        away = (trigger / price - 1) * 100
+        out.append({**base, "Progress": round(float(prog), 1),
+                    "Status": f"{prog:.0f}% of the way. Raise your stop to {new:,.2f} when the price reaches {trigger:,.2f} "
+                              f"({away:+.1f}% from here)."})
+    return out
+
+
 def position_alerts(valued, extras=None, near_pct=1.0, earnings_days=5, plain=False):
     """
     Plain-English warnings about what you own. `extras` may map symbol ->

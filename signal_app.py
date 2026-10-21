@@ -1468,6 +1468,18 @@ with tab_port:
             st.caption("At Robinhood, cancel your old stop order and place a new one at the suggested price, then "
                        "click the button to record it here. A stop only ever moves UP.")
 
+        st.markdown("#### Progress toward your next stop raise")
+        for pr in lg.stop_progress(valued):
+            pc1, pc2 = st.columns([1, 4])
+            pc1.markdown(esc_md(f"**{pr['Symbol']}**  \n" + ("price unavailable" if pr["Price"] is None else f"${pr['Price']:,.2f} now")))
+            if pr["Progress"] is None:
+                pc2.caption(esc_md(pr["Status"]))
+            else:
+                pc2.progress(min(max(pr["Progress"] / 100.0, 0.0), 1.0), text=esc_md(pr["Status"]))
+        st.caption("Each bar fills as a stock moves toward the price where the rules above would raise its stop: up 1R moves it to "
+                   "break-even, 2R locks in +1R, 3R locks in +2R. R is your entry price minus your first recorded stop. "
+                   "A bar that goes backward just means the price pulled back.")
+
         with st.expander("Close or remove a position", expanded=False):
             rp = st.selectbox("Position", valued["Symbol"].tolist(), key="rm_pos")
             rrow = valued[valued["Symbol"] == rp].iloc[0]
