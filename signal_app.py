@@ -447,6 +447,16 @@ def build_overlay(sym, positions, tx, suggested=None):
 # ---- portfolio state (recomputed on every run from the local ledger)
 tx_all = store.transactions()
 pos = lg.build_positions(tx_all)
+auto_closed = []
+if not pos["open"].empty:
+    _hp = cached_prices(tuple(sorted(pos["open"]["Symbol"])))
+    try:
+        auto_closed = store.auto_close_stopped(lg.value_positions(pos["open"], _hp, 0.0))
+    except Exception:
+        auto_closed = []
+    if auto_closed:
+        tx_all = store.transactions()
+        pos = lg.build_positions(tx_all)
 held_prices = cached_prices(tuple(sorted(pos["open"]["Symbol"]))) if not pos["open"].empty else {}
 valued = lg.value_positions(pos["open"], held_prices, acct_value)
 psum = lg.portfolio_summary(valued, pos["closed"], pos["realized"], acct_value, cash_reserve)
@@ -520,6 +530,17 @@ if practice:
                 "</div>", unsafe_allow_html=True)
 show_weather_banner()
 show_alert_banner()
+st.session_state.setdefault("stop_notices", [])
+st.session_state["stop_notices"] += auto_closed
+for _n, _c in enumerate(list(st.session_state["stop_notices"])):
+    _loss = _c["Loss $"]
+    st.error(f"Stop loss hit: {_c['Symbol']} traded at \\${_c['Price']:,.2f}, at or below your stop of "
+             f"\\${_c['Stop']:,.2f}. It was taken off your open list and recorded as a sale of "
+             f"{_c['Shares']:g} shares at the stop price ({'-' if _loss < 0 else '+'}\\${abs(_loss):,.2f}). "
+             "If your real fill was different, fix it in Trade history and corrections.")
+    if st.button("Got it", key=f"stop_ok_{_n}_{_c['Symbol']}"):
+        st.session_state["stop_notices"].pop(_n)
+        st.rerun()
 
 (tab_today, tab_scan, tab_chart, tab_port, tab_week, tab_bt, tab_learn, tab_guide) = st.tabs(
     ["Today", "Scanner", "Chart", "Portfolio", "Weekly review", "Backtest & history", "Learn", "Guide"])

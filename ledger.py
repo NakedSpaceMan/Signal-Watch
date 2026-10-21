@@ -192,6 +192,14 @@ def value_positions(open_df, prices, account_value=0.0):
     return d
 
 
+def stopped_out(valued):
+    """Open positions whose live price is at or below the recorded stop (the stop order would have triggered)."""
+    if valued is None or valued.empty:
+        return valued.iloc[0:0] if valued is not None else valued
+    m = valued["Price"].notna() & valued["Stop"].notna() & (valued["Price"] <= valued["Stop"])
+    return valued[m]
+
+
 def portfolio_summary(valued, closed, realized, account_value=0.0, reserve=0.0, today=None):
     """Headline numbers: exposure, open risk, realized P&L today and overall, cash left to invest."""
     today = pd.Timestamp(today or pd.Timestamp.now()).date()
@@ -561,6 +569,25 @@ class Store:
         """Changes whenever transactions change; used to refresh cached portfolio numbers."""
         row = self.con.execute("SELECT COUNT(*), COALESCE(MAX(id), 0) FROM transactions").fetchone()
         return int(row[0]) * 1_000_000 + int(row[1])
+
+    def auto_close_stopped(self, valued):
+        """
+        Sell every position whose price has fallen to its stop, recorded at the stop price (that is where the
+        stop order triggers; a real fill can be lower after a gap, which the user can fix in trade history).
+        Targets are never auto-closed. Returns a list of dicts describing what was closed.
+        """
+        done = []
+        for _, r in stopped_out(valued).iterrows():
+            sym = r["Symbol"]
+            held = self.shares_held(sym)
+            if held <= 1e-9:
+                continue
+            note = (f"Auto-closed: price ${r["Price"]:.2f} reached the stop ${r["Stop"]:.2f}. "
+                    f"Recorded at the stop price; fix the fill in Trade history if your real fill was different.")
+            self.add_transaction(sym, "SELL", held, float(r["Stop"]), notes=note)
+            done.append({"Symbol": sym, "Shares": held, "Stop": float(r["Stop"]), "Price": float(r["Price"]),
+                         "Loss $": held * (float(r["Stop"]) - float(r["Avg cost"]))})
+        return done
 
     def transactions(self):
         df = pd.read_sql_query("SELECT * FROM transactions ORDER BY ts, id", self.con)
