@@ -64,13 +64,14 @@ bash start_signal_watch.sh
 ```
 Your Windows browser opens by itself. If it doesn't, open <http://localhost:8501>.
 
-### Windows without WSL (not tested)
+### Windows without WSL (being tested)
+Install Python 3.10+ from <https://www.python.org/downloads/> (tick **Add python.exe to PATH**), then:
 ```powershell
-py -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-streamlit run signal_app.py
+git clone https://github.com/NakedSpaceMan/Signal-Watch.git
+cd Signal-Watch
+start_signal_watch.bat
 ```
+You can also just double-click `start_signal_watch.bat`. It sets up, updates the Yahoo libraries once a day, and opens the app.
 
 Stop the app with **Ctrl+C** in the terminal. After you update the code, Streamlit usually shows a "Source file changed" banner: click **Rerun** (or **Always rerun**) to load it. Restart the app after adding a new file or changing `.streamlit/config.toml` (which hides the Deploy button).
 

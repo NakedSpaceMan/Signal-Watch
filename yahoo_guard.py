@@ -3,6 +3,7 @@ Keeps Yahoo data working: updates the data libraries once a day, and remembers w
 so the app can stop hammering it and tell you to wait.
 """
 import json
+import os
 import subprocess
 import sys
 import time
@@ -63,7 +64,7 @@ def clear_limit(path=None):
 
 
 def limit_message(until):
-    when = time.strftime("%-I:%M %p", time.localtime(until))
+    when = time.strftime("%I:%M %p", time.localtime(until)).lstrip("0")   # "%-I" doesn't work on Windows
     return ("Yahoo is limiting you (too many requests). Wait 30 to 60 minutes before doing another scan or "
             f"refresh. The app is pausing its own Yahoo requests until about {when}. Each extra request "
             "can make the wait longer.")
@@ -80,6 +81,8 @@ def daily_update(today=None, path=None, runner=None):
     Once per calendar day, upgrade yfinance and curl_cffi (Yahoo changes often and old versions get blocked).
     Returns None if nothing ran today, else a short status string.
     """
+    if os.name == "nt" and runner is None:
+        return None   # Windows can't replace library files that are in use; the .bat launcher updates at startup
     today = str(today or date.today())
     state = _read(path)
     if state.get("last_update") == today:
