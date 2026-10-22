@@ -1863,6 +1863,7 @@ with tab_bt:
                     f"swing trading builds up. Stops are not failures. They are the cost of doing business "
                     f"that keeps each loss small."))
             eq = trades[trades["reason"] != "Still open"].sort_values("exit_date")
+            import plotly.graph_objects as go
             _cum = eq["r"].cumsum()
             _fig = go.Figure(go.Scatter(x=eq["exit_date"], y=_cum, mode="lines", name="Running total",
                                         line=dict(color=design.derive(design._P)["beacon"], width=2),
