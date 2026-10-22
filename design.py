@@ -116,7 +116,7 @@ def palette_for(choice):
 
 # ---- Streamlit's own theme file
 def config_text(p):
-    return ("[client]\ntoolbarMode = \"minimal\"\n\n[theme]\nbase = \"dark\"\n"
+    return ("[theme]\nbase = \"dark\"\n"
             f"primaryColor = \"{p['accent']}\"\nbackgroundColor = \"{p['bg']}\"\n"
             f"secondaryBackgroundColor = \"{p['box']}\"\ntextColor = \"{p['text']}\"\n")
 
@@ -205,6 +205,9 @@ button[kind="primary"] p, [data-testid="stBaseButton-primary"] p {{ color: var(-
   padding: 12px 16px; }}
 [data-testid="stSidebar"] {{ border-right: 1px solid var(--sw-tide); }}
 [data-testid="stDataFrame"] {{ border-radius: 10px; }}
+
+/* Hide only the Deploy button. The menu with Rerun stays. */
+[data-testid="stAppDeployButton"], .stDeployButton {{ display: none !important; }}
 
 /* Phones */
 @media (max-width: 640px) {{
