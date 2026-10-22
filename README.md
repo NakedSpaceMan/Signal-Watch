@@ -1,12 +1,20 @@
 # Signal Watch
 
-A small, local stock-signal helper for swing trading, built with Python and Streamlit. It shows buy/sell signals
-with plain-English explanations, scans for setups, tracks a practice or real ledger, and gives a Buy / Hold / Sell
-read from the last three months of daily data, including an earnings check and a news check.
+Signal Watch is a free, local app made to **help people learn** how swing trading works. It shows buy/sell
+signals with plain-English explanations, scans for setups, tracks a practice or real ledger, and runs lessons and
+practice charts. It is built with Python and Streamlit.
 
-> **Not financial advice.** Signals are clues, not orders, and they are often wrong. Data comes from Yahoo Finance
-> through the unofficial `yfinance` library, so it can be delayed, wrong or missing. The app **never connects to a
-> brokerage and never places orders**. Your trades and settings stay in files on your own computer.
+> ## ⚠️ Read this first: you are on your own
+> **This is an educational tool, not financial advice, and not a service that tells you what to buy or sell.**
+> Signals are clues, not orders, and they are often wrong. Past results, including any backtest in this app,
+> do not predict future results, and backtests are flattered by hindsight. **If you trade real money based on
+> anything in this app, every decision, every gain and every loss is yours alone.** The author is not a financial
+> adviser, takes no responsibility for your trades, and is not liable for any losses. You can lose all of your
+> money. Use Practice mode, learn first, and talk to a licensed professional about your own situation.
+>
+> Data comes from Yahoo Finance through the unofficial `yfinance` library, for personal use, so it can be delayed,
+> wrong or missing. The app **never connects to a brokerage and never places orders**. Your trades and settings
+> stay in files on your own computer.
 
 ## What it does
 
