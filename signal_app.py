@@ -1957,10 +1957,10 @@ with tab_bt:
                 except Exception:
                     pass
                 _sf.add_hline(y=_sim_start, line_dash="dot", line_color=design.ink(0.3))
-                _sf.update_layout(template=design.CHART, height=380, margin=dict(l=10, r=10, t=40, b=10),
+                _sf.update_layout(template=design.CHART, height=420, margin=dict(l=10, r=10, t=40, b=60),
                                   title="Account balance when the trades are taken with real limits",
                                   yaxis_title="Balance ($)", xaxis_title=None,
-                                  legend=dict(orientation="h", y=1.02, x=0, yanchor="bottom"))
+                                  legend=dict(orientation="h", y=-0.1, x=0, yanchor="top"))
                 show_chart(_sf, key="bt_account_curve")
             st.caption(esc_md(
                 "Still not a promise. It uses past data and today's stock list, takes same-day signals in alphabetical "
