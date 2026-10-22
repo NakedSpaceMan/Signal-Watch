@@ -493,7 +493,7 @@ def build_chart(df, ev, active, window, title, opts=None, overlay=None, sr=None)
                                      line=dict(width=0.8, color="rgba(150,150,150,0.6)", dash="dot")), row=1, col=1)
     if o["vwap"] and intraday:
         fig.add_trace(go.Scatter(x=x, y=cu.session_vwap(df), name="VWAP",
-                                 line=dict(width=1.4, color="#ffee58", dash="dash")), row=1, col=1)
+                                 line=dict(width=1.4, color=design.line_yellow(), dash="dash")), row=1, col=1)
     if o["sr"]:
         cu.add_sr_lines(fig, sr or cu.support_resistance(df), x)
 
@@ -530,7 +530,7 @@ def build_chart(df, ev, active, window, title, opts=None, overlay=None, sr=None)
         vcol = np.where(df.Close >= df.Open, "#26a69a", "#ef5350")
         fig.add_trace(go.Bar(x=x, y=df.Volume, name="Volume", marker_color=vcol), row=row["volume"], col=1)
         fig.add_trace(go.Scatter(x=x, y=df.Volume.rolling(20).mean(), name="Avg volume",
-                                 line=dict(width=1.2, color="#ffee58")), row=row["volume"], col=1)
+                                 line=dict(width=1.2, color=design.line_yellow())), row=row["volume"], col=1)
 
     fig.add_trace(go.Scatter(x=x, y=df.RSI, name="RSI", line=dict(color="#7e57c2", width=1.3)), row=row["rsi"], col=1)
     for y in (30, 70):

@@ -851,7 +851,7 @@ def build_figure(chart, markup=True, reveal=False, user_plan=None, quiz_lines=No
             fig.add_trace(go.Scatter(
                 x=[h + out["bar"]], y=[out["exit"]], mode="markers+text", text=[out["reason"]], textposition="bottom center",
                 textfont=dict(size=12, color="#ffffff"), name="Exit",
-                marker=dict(symbol="x", size=15, color="#ffffff", line=dict(width=2, color="#ffffff")),
+                marker=dict(symbol="x", size=15, color=design.ink(1), line=dict(width=2, color=design.ink(1))),
                 hoverinfo="skip"), row=1, col=1)
     if cone:
         _add_cone(fig, cone, h)
@@ -861,7 +861,7 @@ def build_figure(chart, markup=True, reveal=False, user_plan=None, quiz_lines=No
                            font=dict(size=15, color="#ce93d8"), row=1, col=1)
 
     fig.add_trace(go.Scatter(x=[h - 0.5, h - 0.5], y=[float(hist.Low.min()), float(hist.High.max())], mode="lines",
-                             line=dict(color="rgba(255,255,255,0.35)", dash="dot", width=1), hoverinfo="skip",
+                             line=dict(color=design.ink(0.35), dash="dot", width=1), hoverinfo="skip",
                              showlegend=False), row=1, col=1)
     fig.add_annotation(x=h - 0.5, y=float(hist.High.max()), text="Decision point  →", showarrow=False,
                        xanchor="right", yanchor="bottom", font=dict(size=11, color="#bbbbbb"), row=1, col=1)

@@ -245,7 +245,7 @@ document.getElementById("bill").addEventListener("click", () => {
     if (p && p.catch) p.catch(webAudioFallback);
   } catch (e) { webAudioFallback(); }
 });
-</script>""", height=150)
+</script>""", height=140)
 
 
 # ====================================================================== helpers
@@ -1239,9 +1239,9 @@ def mark_weekends(fig, index):
         for a, b in zip(idx[:-1], idx[1:]):
             if a.weekday() <= 4 and (b.normalize() - a.normalize()).days >= 1 and b.weekday() < a.weekday():
                 at = (a.normalize() + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-                fig.add_vline(x=at, row="all", col=1, line_dash="dot", line_color="rgba(255,255,255,0.55)", line_width=1.5)
+                fig.add_vline(x=at, row="all", col=1, line_dash="dot", line_color=design.ink(0.55), line_width=1.5)
                 fig.add_annotation(x=at, y=1.0, yref="paper", text="Weekend", showarrow=False, yanchor="bottom",
-                                   font=dict(size=11, color="rgba(255,255,255,0.8)"))
+                                   font=dict(size=11, color=design.ink(0.8)))
     except Exception:
         pass
 
@@ -1269,7 +1269,7 @@ def show_day_chart(sym, overlay, with_volume=True):
                         row_heights=[0.75, 0.25] if with_volume else [1.0])
     fig.add_trace(go.Candlestick(x=x, open=day.Open, high=day.High, low=day.Low, close=day.Close, name="Price",
                                  increasing_line_color="#26a69a", decreasing_line_color="#ef5350"), row=1, col=1)
-    fig.add_trace(go.Scatter(x=x, y=vwap, name="VWAP (average price paid today)", line=dict(width=1.3, color="#ffee58")), row=1, col=1)
+    fig.add_trace(go.Scatter(x=x, y=vwap, name="VWAP (average price paid today)", line=dict(width=1.3, color=design.line_yellow())), row=1, col=1)
     cu.add_position_overlay(fig, overlay, x, daily=False, row=1)
     if with_volume:
         vcol = ["#26a69a" if c >= o else "#ef5350" for c, o in zip(day.Close, day.Open)]
@@ -1927,6 +1927,7 @@ with tab_bt:
 
 st.sidebar.divider()
 design.colors_ui(SETTINGS_FILE)
+st.sidebar.divider()
 st.sidebar.caption("Signal Watch is free and made to help people learn. If it helped, you can "
                    "[buy me a coffee](https://buymeacoffee.com/signal.watch). Totally optional. Not financial advice: "
                    "if you trade on it, you are on your own.")

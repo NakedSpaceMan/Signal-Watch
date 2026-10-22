@@ -200,7 +200,7 @@ def build_swing_chart(df, flags, criteria, title, setups=("pullback", "breakout"
         vcol = np.where(df.Close >= df.Open, "#26a69a", "#ef5350")
         fig.add_trace(go.Bar(x=x, y=df.Volume, name="Volume", marker_color=vcol), row=row["volume"], col=1)
         fig.add_trace(go.Scatter(x=x, y=df.Volume.rolling(30).mean(), name="30d avg volume",
-                                 line=dict(width=1.2, color="#ffee58")), row=row["volume"], col=1)
+                                 line=dict(width=1.2, color=design.line_yellow())), row=row["volume"], col=1)
         fig.update_yaxes(title_text="Volume", row=row["volume"], col=1)
 
     fig.add_trace(go.Scatter(x=x, y=df.RSI, name="RSI", line=dict(color="#7e57c2", width=1.3)), row=row["rsi"], col=1)
@@ -246,7 +246,7 @@ def add_range_cone(fig, cone, x, row=1):
                                  line=dict(width=w, color="rgba(41,182,246,0.55)"), fill="tonexty", fillcolor=fc,
                                  hovertext=tips, hoverinfo="text"), row=row, col=1)
     fig.add_trace(go.Scatter(x=xs, y=ys(cone["mid"]), mode="lines", name="Today's price (flat)", showlegend=False,
-                             line=dict(width=1, dash="dot", color="rgba(255,255,255,0.45)"), hoverinfo="skip"),
+                             line=dict(width=1, dash="dot", color=design.ink(0.45)), hoverinfo="skip"),
                   row=row, col=1)
     for val, anchor in ((cone["hi68"][-1], "bottom"), (cone["lo68"][-1], "top")):
         fig.add_annotation(x=fx[-1], y=float(val), text=f"{val:.2f}", showarrow=False, xanchor="left",

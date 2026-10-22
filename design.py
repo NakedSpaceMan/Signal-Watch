@@ -13,22 +13,31 @@ import json
 from html import escape
 from pathlib import Path
 
-# ---- colour schemes: page, boxes (sidebar, cards), text, accent
+# ---- colour schemes: page, boxes (sidebar, cards), text, accent. Each has a dark and a light version.
 DEFAULT_NAME = "Night harbor"
+
+
+def _p(bg, box, text, accent):
+    return {"bg": bg, "box": box, "text": text, "accent": accent}
+
+
 PRESETS = {
-    "Night harbor":    {"bg": "#0F1722", "box": "#172233", "text": "#E6ECF4", "accent": "#F5B544"},
-    "Plum and mint":   {"bg": "#17121F", "box": "#221A2E", "text": "#EFE9F7", "accent": "#7FE0C2"},
-    "Graphite and orchid": {"bg": "#141415", "box": "#1F1F22", "text": "#EDEDF0", "accent": "#C792EA"},
-    "Forest and sand": {"bg": "#101A16", "box": "#18261F", "text": "#E7EFE9", "accent": "#D9B88F"},
-    "Ember":           {"bg": "#1A1311", "box": "#271C19", "text": "#F3EAE6", "accent": "#FF8F6B"},
+    "Night harbor": {"dark": _p("#0F1722", "#172233", "#E6ECF4", "#F5B544"),
+                     "light": _p("#F3F6FA", "#E4EBF4", "#14202E", "#B35F00")},
+    "Plum and mint": {"dark": _p("#17121F", "#221A2E", "#EFE9F7", "#7FE0C2"),
+                      "light": _p("#F7F3FB", "#ECE4F5", "#231A2F", "#0B7A62")},
+    "Graphite and orchid": {"dark": _p("#141415", "#1F1F22", "#EDEDF0", "#C792EA"),
+                            "light": _p("#F5F5F6", "#E8E8EB", "#1A1A1E", "#7B3FA6")},
+    "Forest and sand": {"dark": _p("#101A16", "#18261F", "#E7EFE9", "#D9B88F"),
+                        "light": _p("#F3F7F4", "#E3ECE6", "#14231B", "#8A5A1F")},
+    "Ember": {"dark": _p("#1A1311", "#271C19", "#F3EAE6", "#FF8F6B"),
+              "light": _p("#FBF5F2", "#F1E5E0", "#2A1A15", "#C2410C")},
 }
 
-# meaning colours stay fixed so "good" and "bad" always read the same
-GAIN = "#3DBFA0"
-LOSS = "#F07167"
-SKY = "#7DB3F0"
-CAUTION = "#F5B544"
-WEATHER_COLOURS = {"success": GAIN, "info": SKY, "warning": CAUTION, "error": LOSS}
+# meaning colours keep their meaning in every scheme (teal = up, coral = down); light mode uses deeper shades
+GAIN, LOSS, SKY, CAUTION = "#3DBFA0", "#F07167", "#7DB3F0", "#F5B544"
+_MEANING = {"dark": {"success": GAIN, "info": SKY, "warning": CAUTION, "error": LOSS},
+            "light": {"success": "#0E8F73", "info": "#2F6FB8", "warning": "#B7791F", "error": "#D6453C"}}
 
 
 # ---- colour maths
@@ -60,14 +69,18 @@ def contrast(a, b):
     return (hi + 0.05) / (lo + 0.05)
 
 
+def mode_of(p):
+    return "light" if _lum(p["bg"]) > 0.4 else "dark"
+
+
 def check_palette(p):
     """Return a plain-English problem with this scheme, or None if it is readable."""
     if contrast(p["text"], p["bg"]) < 4.5 or contrast(p["text"], p["box"]) < 4.5:
         return "The text colour is too close to the background colours to read comfortably."
     if contrast(p["accent"], p["bg"]) < 3:
         return "The accent colour is too close to the background to stand out."
-    if _lum(p["bg"]) > 0.25 or _lum(p["box"]) > 0.3:
-        return "Pick darker page and box colours. The charts are built for a dark background."
+    if 0.25 < _lum(p["bg"]) < 0.4:
+        return "Pick a clearly dark or clearly light page colour. Mid-tones make the charts hard to read."
     return None
 
 
@@ -92,31 +105,34 @@ def load_choice(settings_path):
     return t if isinstance(t, dict) else {}
 
 
-def save_choice(settings_path, name, custom=None):
+def save_choice(settings_path, name, custom=None, mode="dark"):
     try:
         data = json.loads(Path(settings_path).read_text())
     except Exception:
         data = {}
-    data["theme"] = {"name": name, "custom": custom or {}}
+    data["theme"] = {"name": name, "mode": mode, "custom": custom or {}}
     Path(settings_path).write_text(json.dumps(data))
 
 
 def palette_for(choice):
+    """(scheme name, colours) for a saved choice. Falls back to the default if the choice is unusable."""
     name = choice.get("name", DEFAULT_NAME)
+    mode = "light" if choice.get("mode") == "light" else "dark"
     if name == "Custom":
         c = choice.get("custom", {})
-        p = {k: c.get(k, PRESETS[DEFAULT_NAME][k]) for k in ("bg", "box", "text", "accent")}
+        base = PRESETS[DEFAULT_NAME][mode]
+        p = {k: c.get(k, base[k]) for k in ("bg", "box", "text", "accent")}
         if check_palette(p) is None:
             return "Custom", p
-        return DEFAULT_NAME, dict(PRESETS[DEFAULT_NAME])
+        return DEFAULT_NAME, dict(base)
     if name in PRESETS:
-        return name, dict(PRESETS[name])
-    return DEFAULT_NAME, dict(PRESETS[DEFAULT_NAME])
+        return name, dict(PRESETS[name][mode])
+    return DEFAULT_NAME, dict(PRESETS[DEFAULT_NAME][mode])
 
 
 # ---- Streamlit's own theme file
 def config_text(p):
-    return ("[theme]\nbase = \"dark\"\n"
+    return (f"[theme]\nbase = \"{mode_of(p)}\"\n"
             f"primaryColor = \"{p['accent']}\"\nbackgroundColor = \"{p['bg']}\"\n"
             f"secondaryBackgroundColor = \"{p['box']}\"\ntextColor = \"{p['text']}\"\n")
 
@@ -206,6 +222,9 @@ button[kind="primary"] p, [data-testid="stBaseButton-primary"] p {{ color: var(-
 [data-testid="stSidebar"] {{ border-right: 1px solid var(--sw-tide); }}
 [data-testid="stDataFrame"] {{ border-radius: 10px; }}
 
+/* Less dead space at the bottom of the sidebar */
+[data-testid="stSidebarUserContent"] {{ padding-bottom: 0.5rem !important; }}
+
 /* Hide only the Deploy button. The menu with Rerun stays. */
 [data-testid="stAppDeployButton"], .stDeployButton {{ display: none !important; }}
 
@@ -218,7 +237,7 @@ button[kind="primary"] p, [data-testid="stBaseButton-primary"] p {{ color: var(-
 
 
 # ---- the active scheme
-_NAME, _P = DEFAULT_NAME, dict(PRESETS[DEFAULT_NAME])
+_NAME, _P = DEFAULT_NAME, dict(PRESETS[DEFAULT_NAME]["dark"])
 CHART = "plotly_dark"
 
 
@@ -231,14 +250,25 @@ def apply(p):
         import copy
         import plotly.io as pio
 
-        t = copy.deepcopy(pio.templates["plotly_dark"])
+        t = copy.deepcopy(pio.templates["plotly_white" if mode_of(_P) == "light" else "plotly_dark"])
         t.layout.update(paper_bgcolor=d["night"], plot_bgcolor=d["night"], font=dict(color=d["fog"]),
                         xaxis=dict(gridcolor=d["tide"], zerolinecolor=d["tide"], linecolor=d["tide"]),
                         yaxis=dict(gridcolor=d["tide"], zerolinecolor=d["tide"], linecolor=d["tide"]))
-        pio.templates["signal_dark"] = t
-        CHART = "signal_dark"
+        pio.templates["signal_theme"] = t
+        CHART = "signal_theme"
     except Exception:
-        CHART = "plotly_dark"
+        CHART = "plotly_white" if mode_of(_P) == "light" else "plotly_dark"
+
+
+def ink(alpha=1.0):
+    """The text colour as an rgba() string, for chart lines and labels that must show on any background."""
+    r, g, b = _rgb(_P["text"])
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def line_yellow():
+    """A highlight colour for indicator lines (VWAP, volume average) that is readable in light and dark."""
+    return "#B7791F" if mode_of(_P) == "light" else "#ffee58"
 
 
 def inject():
@@ -250,7 +280,7 @@ def inject():
 def header(weather_level=None, weather_label=None):
     """Wordmark with a beacon that takes the colour of the market weather."""
     import streamlit as st
-    colour = WEATHER_COLOURS.get(weather_level, _P["accent"])
+    colour = _MEANING[mode_of(_P)].get(weather_level, _P["accent"])
     d = derive(_P)
     title = f"Market weather: {escape(str(weather_label))}" if weather_label else "Market weather unavailable"
     svg = (
@@ -280,14 +310,16 @@ def colors_ui(settings_path):
     import streamlit as st
     choice = load_choice(settings_path)
     cur_name, cur_p = palette_for(choice)
+    cur_mode = mode_of(cur_p)
     names = list(PRESETS) + ["Custom"]
     with st.sidebar.expander("Colors"):
         picked = st.selectbox("Color scheme", names, index=names.index(cur_name), key="theme_pick",
                               help="Pick a ready-made scheme, or choose Custom to set your own four colors. "
                                    "Meaning colors stay the same: teal for gains and coral for losses.")
-        new_custom = dict(choice.get("custom") or cur_p)
+        mode = cur_mode
+        custom = dict(choice.get("custom") or {})
         if picked == "Custom":
-            base = {k: new_custom.get(k, cur_p[k]) for k in ("bg", "box", "text", "accent")}
+            base = {k: custom.get(k, cur_p[k]) for k in ("bg", "box", "text", "accent")}
             c1, c2 = st.columns(2)
             base["bg"] = c1.color_picker("Page", base["bg"], key="theme_bg")
             base["box"] = c2.color_picker("Boxes and sidebar", base["box"], key="theme_box")
@@ -296,19 +328,23 @@ def colors_ui(settings_path):
             problem = check_palette(base)
             if problem:
                 st.warning(problem)
-            new_custom = base
-            new_p = base
+            new_p, custom = base, base
+            mode = mode_of(base)
         else:
+            label = st.radio("Brightness", ["Dark", "Light"], index=0 if cur_mode == "dark" else 1,
+                             horizontal=True, key="theme_mode",
+                             help="Dark is easier on the eyes at night. Light suits a bright room.")
+            mode = "light" if label == "Light" else "dark"
             problem = None
-            new_p = PRESETS[picked]
-        if not problem and (picked != cur_name or (picked == "Custom" and new_p != cur_p)):
-            save_choice(settings_path, picked, new_custom if picked == "Custom" else choice.get("custom"))
+            new_p = PRESETS[picked][mode]
+        if not problem and (picked != cur_name or new_p != cur_p):
+            save_choice(settings_path, picked, custom, mode)
             st.rerun()
-        if picked != DEFAULT_NAME and st.button("Back to the default colors", key="theme_reset"):
-            save_choice(settings_path, DEFAULT_NAME, choice.get("custom"))
+        if (picked != DEFAULT_NAME or mode != "dark") and st.button("Back to the default colors", key="theme_reset"):
+            save_choice(settings_path, DEFAULT_NAME, choice.get("custom"), "dark")
             st.rerun()
-        st.caption("After changing colors, close Signal Watch and open it again once so every checkbox and "
-                   "slider picks up the new accent.")
+        st.caption("After changing colors or brightness, close Signal Watch and open it again once so every "
+                   "checkbox and slider picks up the change.")
 
 
-apply(PRESETS[DEFAULT_NAME])
+apply(PRESETS[DEFAULT_NAME]["dark"])
