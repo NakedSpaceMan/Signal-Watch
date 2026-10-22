@@ -1863,7 +1863,24 @@ with tab_bt:
                     f"swing trading builds up. Stops are not failures. They are the cost of doing business "
                     f"that keeps each loss small."))
             eq = trades[trades["reason"] != "Still open"].sort_values("exit_date")
-            st.line_chart(pd.DataFrame({"Cumulative R": eq["r"].cumsum().to_numpy()}, index=eq["exit_date"]))
+            _cum = eq["r"].cumsum()
+            _fig = go.Figure(go.Scatter(x=eq["exit_date"], y=_cum, mode="lines", name="Running total",
+                                        line=dict(color=design.derive(design._P)["beacon"], width=2),
+                                        hovertemplate="%{x|%b %d, %Y}<br>Running total: %{y:+.1f}R<extra></extra>"))
+            _fig.add_hline(y=0, line_dash="dot", line_color=design.ink(0.4))
+            _fig.update_layout(template=design.CHART, height=380, margin=dict(l=10, r=10, t=40, b=10),
+                               title="Running total of every simulated trade, in R",
+                               yaxis_title="R (units of planned risk)", xaxis_title=None, showlegend=False)
+            show_chart(_fig, key="bt_cum_r")
+            _risk_d = acct_value * risk_pct / 100 if acct_value > 0 else 0
+            st.caption(esc_md(
+                "**The scale on the left is R, not percent.** One R is the amount you planned to risk on a trade "
+                "(the gap between entry and stop). Each trade's result is counted in R: a winner at a 2-to-1 target "
+                "adds +2, a stopped-out loser subtracts 1. The line is the running total, so +100 means all trades "
+                "together made 100 times a single trade's risk."
+                + (f" At your current settings one R is about ${_risk_d:,.2f}, so +100R would be about "
+                   f"${100 * _risk_d:,.0f}. This does not compound, ignores fees and slippage, and uses past data, "
+                   f"so treat it as a shape to judge, not a forecast." if _risk_d > 0 else "")))
             with st.expander("Does the quality score actually help? (test on these same trades)"):
                 st.caption("The scanner ranks setups with a 0-100 score. This checks, using only information that existed "
                            "on each signal day, whether higher scores really did better, compared with the old "
