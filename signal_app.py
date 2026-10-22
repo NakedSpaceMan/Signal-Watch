@@ -248,14 +248,6 @@ document.getElementById("bill").addEventListener("click", () => {
 </script>""", height=150)
 
 
-try:
-    with st.sidebar:
-        st.divider()
-        money_egg()
-except Exception:
-    pass
-
-
 # ====================================================================== helpers
 @st.cache_data(ttl=20, show_spinner=False)
 def fetch(tkr, period, intv):
@@ -1938,3 +1930,10 @@ design.colors_ui(SETTINGS_FILE)
 st.sidebar.caption("Signal Watch is free and made to help people learn. If it helped, you can "
                    "[buy me a coffee](https://buymeacoffee.com/signal.watch). Totally optional. Not financial advice: "
                    "if you trade on it, you are on your own.")
+
+try:
+    with st.sidebar:
+        st.divider()
+        money_egg()
+except Exception:
+    pass
