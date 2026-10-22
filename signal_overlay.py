@@ -20,6 +20,7 @@ indicator rules are frequently wrong; see the hit-rate summary it prints.
 
 import argparse
 import sys
+import design  # registers the chart theme
 
 import numpy as np
 import pandas as pd
@@ -542,7 +543,7 @@ def build_chart(df, ev, active, window, title, opts=None, overlay=None, sr=None)
         fig.add_trace(go.Scatter(x=x, y=df.MACD_SIG, name="Signal", line=dict(color="#ff9800", width=1.2)), row=row["macd"], col=1)
 
     fig.update_layout(
-        title=title, template="plotly_dark", height=420 + 160 * len(panels),
+        title=title, template=design.CHART, height=420 + 160 * len(panels),
         xaxis_rangeslider_visible=False, hovermode="closest",
         hoverlabel=dict(align="left"), legend=dict(orientation="h", y=1.04),
     )

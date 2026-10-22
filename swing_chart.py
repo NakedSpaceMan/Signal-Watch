@@ -9,6 +9,7 @@ the chart and the scan can never disagree. Plotly is imported only when drawing.
 
 import numpy as np
 import pandas as pd
+import design  # registers the chart theme
 
 import backtest as bt
 import chart_utils as cu
@@ -207,7 +208,7 @@ def build_swing_chart(df, flags, criteria, title, setups=("pullback", "breakout"
         fig.add_hline(y=y, line=dict(color="gray", dash="dash", width=0.8), row=row["rsi"], col=1)
     fig.update_yaxes(title_text="RSI", row=row["rsi"], col=1)
 
-    fig.update_layout(title=title, template="plotly_dark", height=420 + 160 * len(panels),
+    fig.update_layout(title=title, template=design.CHART, height=420 + 160 * len(panels),
                       xaxis_rangeslider_visible=False, hovermode="closest",
                       hoverlabel=dict(align="left"), legend=dict(orientation="h", y=1.04))
     fig.update_xaxes(rangebreaks=cu.time_rangebreaks(df.index))

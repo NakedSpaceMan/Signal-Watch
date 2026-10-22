@@ -18,6 +18,7 @@ Plotly is only imported when a figure is drawn.
 """
 
 from functools import lru_cache
+import design  # registers the chart theme
 
 import numpy as np
 import pandas as pd
@@ -864,7 +865,7 @@ def build_figure(chart, markup=True, reveal=False, user_plan=None, quiz_lines=No
                              showlegend=False), row=1, col=1)
     fig.add_annotation(x=h - 0.5, y=float(hist.High.max()), text="Decision point  →", showarrow=False,
                        xanchor="right", yanchor="bottom", font=dict(size=11, color="#bbbbbb"), row=1, col=1)
-    fig.update_layout(template="plotly_dark", height=height, xaxis_rangeslider_visible=False, hovermode="closest",
+    fig.update_layout(template=design.CHART, height=height, xaxis_rangeslider_visible=False, hovermode="closest",
                       legend=dict(orientation="h", y=1.05), margin=dict(l=10, r=10, t=30, b=10),
                       xaxis3=dict(title=dict(text="Trading days (each candle is one day)")))
     fig.update_xaxes(range=[-1, xmax + 2])

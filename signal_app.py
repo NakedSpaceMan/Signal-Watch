@@ -39,9 +39,11 @@ import ledger as lg
 import scanner as sc
 import signal_overlay as so
 import yahoo_guard as yg
+import design
 import swing_chart as swc
 
 st.set_page_config(page_title="Signal Watch", layout="wide")
+design.inject()
 
 
 @st.cache_resource(show_spinner=False)
@@ -532,10 +534,10 @@ def show_weather_banner():
                    "the market as a whole, not any one stock, and it is a rule of thumb, not a forecast.")
 
 
+_w_top = cached_weather()
+design.header(_w_top["level"] if _w_top else None, _w_top["label"] if _w_top else None)
 if practice:
-    st.markdown("<div style='background:#6a1b9a;color:white;padding:10px 14px;border-radius:6px;margin-bottom:8px'>"
-                "<b>PRACTICE MODE</b>: fake money. Trades you record here are kept apart from your real ones."
-                "</div>", unsafe_allow_html=True)
+    design.practice_banner()
 show_weather_banner()
 show_alert_banner()
 _lim_top = yg.limited_until()
@@ -1218,7 +1220,7 @@ def show_growth(tx):
                              line=dict(color="#9e9e9e", width=1.3, dash="dot"),
                              hovertemplate="%{x|%b %d}<br>Locked in %{y:+,.2f}<extra></extra>"))
     fig.add_hline(y=0, line=dict(color="gray", width=1))
-    fig.update_layout(template="plotly_dark", height=340, margin=dict(l=10, r=10, t=30, b=10), hovermode="x unified",
+    fig.update_layout(template=design.CHART, height=340, margin=dict(l=10, r=10, t=30, b=10), hovermode="x unified",
                       yaxis_title="Profit / loss ($)", legend=dict(orientation="h", y=1.12), uirevision="growth")
     fig.update_xaxes(rangebreaks=[dict(bounds=["sat", "mon"])])
     show_chart(fig, "growth_chart")
@@ -1276,7 +1278,7 @@ def show_day_chart(sym, overlay, with_volume=True):
         vcol = ["#26a69a" if c >= o else "#ef5350" for c, o in zip(day.Close, day.Open)]
         fig.add_trace(go.Bar(x=x, y=day.Volume, name="Volume", marker_color=vcol), row=2, col=1)
         fig.update_yaxes(title_text="Volume", row=2, col=1)
-    fig.update_layout(template="plotly_dark", height=620, xaxis_rangeslider_visible=False, hovermode="x unified",
+    fig.update_layout(template=design.CHART, height=620, xaxis_rangeslider_visible=False, hovermode="x unified",
                       title=f"{sym} - today ({days[-1]:%a %b %d}, 5-minute candles)", legend=dict(orientation="h", y=1.06),
                       uirevision=f"{sym}-day")
     fig.update_xaxes(rangebreaks=cu.time_rangebreaks(day.index))
