@@ -154,6 +154,72 @@ def metrics(t):
     }
 
 
+def simulate_account(trades, start_cash, risk_pct, max_open=0):
+    """
+    Replay the trades the way a real account would have had to take them: one pool of money, whole shares,
+    risking `risk_pct` of the account on each trade, and at most `max_open` positions at once (0 = no cap).
+    A trade is skipped when the account is full, or when even one share would risk more than allowed, or when
+    there is no cash left for a share. Profits and losses (with the backtest's trading costs) change the balance
+    so later trades are sized from what the account actually has. Trades that are still open are ignored.
+    Same-day entries are taken in alphabetical order (the real order you would pick them is up to you).
+
+    Returns {"curve": DataFrame (index = date, column "Balance"), "final", "taken", "skipped_full",
+             "skipped_small", "skipped_cash", "max_drawdown_pct", "trades"}.
+    """
+    t = trades[trades["reason"] != "Still open"] if not trades.empty else trades
+    t = t.sort_values(["entry_date", "symbol"]) if not t.empty else t
+    cash = float(start_cash)
+    open_pos = []                      # dicts: exit_date, cost, pnl
+    points = []                        # (date, balance) after each exit
+    taken = skip_full = skip_small = skip_cash = 0
+    log = []
+
+    def balance():
+        return cash + sum(p["cost"] for p in open_pos)
+
+    def release(upto):
+        nonlocal cash
+        for p in sorted([p for p in open_pos if upto is None or p["exit_date"] <= upto],
+                        key=lambda p: p["exit_date"]):
+            open_pos.remove(p)
+            cash += p["cost"] + p["pnl"]
+            points.append((p["exit_date"], balance()))
+
+    for r in t.itertuples(index=False):
+        release(r.entry_date)
+        per_share = float(r.entry) - float(r.stop)
+        if per_share <= 0:
+            continue
+        if max_open and len(open_pos) >= max_open:
+            skip_full += 1
+            continue
+        shares = int(balance() * risk_pct / 100 / per_share)
+        if shares < 1:
+            skip_small += 1
+            continue
+        shares = min(shares, int(cash / float(r.entry)))
+        if shares < 1:
+            skip_cash += 1
+            continue
+        cost = shares * float(r.entry)
+        pnl = cost * float(r.pnl_pct) / 100
+        cash -= cost
+        open_pos.append({"exit_date": r.exit_date, "cost": cost, "pnl": pnl})
+        taken += 1
+        log.append({"symbol": r.symbol, "entry_date": r.entry_date, "exit_date": r.exit_date,
+                    "shares": shares, "pnl": pnl})
+    release(None)
+    curve = pd.DataFrame(points, columns=["date", "Balance"]).set_index("date") if points else \
+        pd.DataFrame({"Balance": []}, index=pd.DatetimeIndex([]))
+    dd = 0.0
+    if len(curve):
+        bal = pd.concat([pd.Series([float(start_cash)]), curve["Balance"].reset_index(drop=True)])
+        dd = float(((bal / bal.cummax()) - 1).min() * 100)
+    return {"curve": curve, "final": float(cash), "taken": taken, "skipped_full": skip_full,
+            "skipped_small": skip_small, "skipped_cash": skip_cash, "max_drawdown_pct": dd,
+            "trades": pd.DataFrame(log)}
+
+
 def split_metrics(t, split_date):
     """Metrics before and after a date, to check the rules on data not used to pick them."""
     split = pd.Timestamp(split_date)

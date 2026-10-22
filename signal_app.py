@@ -1862,6 +1862,34 @@ with tab_bt:
                     f"money. A small positive number, repeated many times with small, controlled losses, is how "
                     f"swing trading builds up. Stops are not failures. They are the cost of doing business "
                     f"that keeps each loss small."))
+            with st.expander("What is R? Explained like I'm five", expanded=bool(beginner)):
+                import plotly.graph_objects as go
+                st.markdown(esc_md(
+                    "**R is just \"one bet\".** Before you buy, you decide how much you're willing to lose if you turn out "
+                    "wrong. That amount is **1R**. Then every result is measured in bets, so a trade on a $5 stock and a "
+                    "trade on a $500 stock can be compared fairly.\n\n"
+                    "**Example.** You buy a share at **$50** and put your stop at **$48**. If you're wrong you lose $2 a "
+                    "share, so **$2 = 1R**. Now see what each ending means:\n\n"
+                    "- Sold at the **$54** target: you made $4, which is two bets, so **+2R**\n"
+                    "- Stopped out at **$48**: you lost one bet, so **-1R**\n"
+                    "- Sold early at **$49**: you lost $1, half a bet, so **-0.5R**\n\n"
+                    "**The formula:** R = (price you sold - price you bought) / (price you bought - your stop)\n\n"
+                    "**Why use it:** adding up R shows whether the *rules* make money, no matter how big your account "
+                    "is. To turn R into dollars, multiply by what one R is worth to you, which is how much you risk per "
+                    "trade (for example 2% of a $100 account = $2, so +10R = $20)."))
+                _lad = go.Figure()
+                for _y, _lab, _c in ((54, "Target $54  =  +2R", design.GAIN), (50, "You buy at $50  =  0R", design.ink(0.8)),
+                                     (48, "Stop $48  =  -1R", design.LOSS)):
+                    _lad.add_hline(y=_y, line_color=_c, line_width=3)
+                    _lad.add_annotation(x=0.5, y=_y, text=_lab, showarrow=False,
+                                        yshift=14, font=dict(size=14, color=_c))
+                _lad.add_annotation(x=0.12, y=48, ax=0.12, ay=50, xref="x", yref="y", axref="x", ayref="y",
+                                    text="1R = $2 of risk", showarrow=True, arrowhead=2, arrowcolor=design.ink(0.6),
+                                    font=dict(size=12, color=design.ink(0.8)), xanchor="left")
+                _lad.update_layout(template=design.CHART, height=260, margin=dict(l=10, r=10, t=10, b=10),
+                                   xaxis=dict(visible=False, range=[0, 1]), yaxis=dict(range=[46.5, 56], title="Price ($)"),
+                                   showlegend=False)
+                show_chart(_lad, key="bt_r_ladder")
             eq = trades[trades["reason"] != "Still open"].sort_values("exit_date")
             import plotly.graph_objects as go
             _cum = eq["r"].cumsum()
@@ -1882,6 +1910,62 @@ with tab_bt:
                 + (f" At your current settings one R is about ${_risk_d:,.2f}, so +100R would be about "
                    f"${100 * _risk_d:,.0f}. This does not compound, ignores fees and slippage, and uses past data, "
                    f"so treat it as a shape to judge, not a forecast." if _risk_d > 0 else "")))
+            st.markdown("### What would a real account have done?")
+            st.caption(esc_md(
+                "The R chart above adds up every simulated trade as if you could take all of them at once. A real "
+                "account is limited: one pool of money, whole shares, a cap on open positions, and a risk limit per "
+                "trade. This replays the same trades under those limits, so the result is much closer to what you "
+                "could have achieved."))
+            s1, s2, s3 = st.columns(3)
+            _sim_start = s1.number_input("Starting money ($)", min_value=10.0, value=float(acct_value if acct_value > 0 else 100.0),
+                                         step=50.0, key="sim_start", help="How much the pretend account starts with.")
+            _sim_risk = s2.number_input("Max loss per trade (% of account)", min_value=0.1, max_value=10.0,
+                                        value=float(risk_pct), step=0.25, key="sim_risk",
+                                        help="How much of the account you risk on each trade. This sets how many shares you buy.")
+            _sim_open = s3.number_input("Most positions at once", min_value=1, max_value=50,
+                                        value=int(max_open) if max_open else 4, step=1, key="sim_open",
+                                        help="Trades that start while you already hold this many are skipped.")
+            _sm = bt.simulate_account(trades, _sim_start, _sim_risk, _sim_open)
+            _ret = (_sm["final"] / _sim_start - 1) * 100
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Ending balance", money(_sm["final"]), f"{_ret:+.1f}%")
+            m2.metric("Trades taken", f"{_sm['taken']:,}", help="Out of all the simulated trades that finished.")
+            m3.metric("Worst drop from a peak", f"{_sm['max_drawdown_pct']:.1f}%",
+                      help="The biggest fall in the balance from a high point before it recovered.")
+            m4.metric("Trades skipped", f"{_sm['skipped_full'] + _sm['skipped_small'] + _sm['skipped_cash']:,}",
+                      help=f"Account full: {_sm['skipped_full']:,}. Too small to afford one share within the risk limit: "
+                           f"{_sm['skipped_small']:,}. Out of cash: {_sm['skipped_cash']:,}.")
+            if len(_sm["curve"]):
+                import plotly.graph_objects as go
+                _c = _sm["curve"]["Balance"]
+                _sf = go.Figure(go.Scatter(x=_c.index, y=_c, mode="lines", name="Your rules, real limits",
+                                           line=dict(color=design.derive(design._P)["beacon"], width=2),
+                                           hovertemplate="%{x|%b %d, %Y}<br>Balance: $%{y:,.2f}<extra></extra>"))
+                try:
+                    _spy = st.session_state.get("bt_frames", (None, None))[1]
+                    if _spy is not None and len(_spy):
+                        _sp = _spy.copy()
+                        if getattr(_sp.index, "tz", None) is not None:
+                            _sp.index = _sp.index.tz_localize(None)
+                        _sp = _sp[(_sp.index >= _c.index.min() - pd.Timedelta(days=5)) & (_sp.index <= _c.index.max())]
+                        if len(_sp):
+                            _sf.add_trace(go.Scatter(x=_sp.index, y=_sim_start * _sp / float(_sp.iloc[0]), mode="lines",
+                                                     name="Just buying SPY (the S&P 500) instead",
+                                                     line=dict(color=design.ink(0.55), width=1.5, dash="dot"),
+                                                     hovertemplate="%{x|%b %d, %Y}<br>SPY: $%{y:,.2f}<extra></extra>"))
+                except Exception:
+                    pass
+                _sf.add_hline(y=_sim_start, line_dash="dot", line_color=design.ink(0.3))
+                _sf.update_layout(template=design.CHART, height=380, margin=dict(l=10, r=10, t=40, b=10),
+                                  title="Account balance when the trades are taken with real limits",
+                                  yaxis_title="Balance ($)", xaxis_title=None,
+                                  legend=dict(orientation="h", y=1.02, x=0, yanchor="bottom"))
+                show_chart(_sf, key="bt_account_curve")
+            st.caption(esc_md(
+                "Still not a promise. It uses past data and today's stock list, takes same-day signals in alphabetical "
+                "order, counts each trade's result at its exit, and applies the cost per trade from the settings above. "
+                "Stops can fill worse than planned, and a small account cannot always buy a share of an expensive "
+                "stock within its risk limit, so some trades are skipped."))
             with st.expander("Does the quality score actually help? (test on these same trades)"):
                 st.caption("The scanner ranks setups with a 0-100 score. This checks, using only information that existed "
                            "on each signal day, whether higher scores really did better, compared with the old "
