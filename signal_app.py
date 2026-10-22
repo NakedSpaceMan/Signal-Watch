@@ -43,9 +43,11 @@ import design
 import swing_chart as swc
 
 st.set_page_config(page_title="Signal Watch", layout="wide")
+_theme_name, _theme_p = design.palette_for(design.load_choice(Path(__file__).with_name("signal_settings.json")))
+design.apply(_theme_p)
 design.inject()
 if design.ensure_config(__file__):
-    st.info("Theme settings were just saved. Close Signal Watch and open it again once to see the full look.")
+    st.info("Color settings were just saved. Close Signal Watch and open it again once to see the full look.")
 
 
 @st.cache_resource(show_spinner=False)
@@ -1932,6 +1934,7 @@ with tab_bt:
             st.info("Not enough time has passed since your scans to measure them. Check again after the next session closes.")
 
 st.sidebar.divider()
+design.colors_ui(SETTINGS_FILE)
 st.sidebar.caption("Signal Watch is free and made to help people learn. If it helped, you can "
                    "[buy me a coffee](https://buymeacoffee.com/signal.watch). Totally optional. Not financial advice: "
                    "if you trade on it, you are on your own.")
