@@ -1884,8 +1884,9 @@ with tab_bt:
                     _lad.add_annotation(x=0.5, y=_y, text=_lab, showarrow=False,
                                         yshift=14, font=dict(size=14, color=_c))
                 _lad.add_annotation(x=0.12, y=48, ax=0.12, ay=50, xref="x", yref="y", axref="x", ayref="y",
-                                    text="1R = $2 of risk", showarrow=True, arrowhead=2, arrowcolor=design.ink(0.6),
-                                    font=dict(size=12, color=design.ink(0.8)), xanchor="left")
+                                    text="", showarrow=True, arrowhead=2, arrowwidth=2, arrowcolor=design.ink(0.7))
+                _lad.add_annotation(x=0.14, y=49, text="1R = $2 of risk", showarrow=False, xanchor="left",
+                                    font=dict(size=13, color=design.ink(0.9)))
                 _lad.update_layout(template=design.CHART, height=260, margin=dict(l=10, r=10, t=10, b=10),
                                    xaxis=dict(visible=False, range=[0, 1]), yaxis=dict(range=[46.5, 56], title="Price ($)"),
                                    showlegend=False)
