@@ -39,6 +39,17 @@ practice charts. It is built with Python and Streamlit.
 You need **Python 3.10 or newer** and an internet connection. The launcher creates its own private environment the
 first time (a few minutes), then just opens the app.
 
+### Windows (tested)
+Install Python 3.10+ from <https://www.python.org/downloads/> and tick **Add python.exe to PATH** during setup. Then:
+```powershell
+git clone https://github.com/NakedSpaceMan/Signal-Watch.git
+cd Signal-Watch
+start_signal_watch.bat
+```
+No git? Download the repo as a zip from GitHub, extract it, and double-click `start_signal_watch.bat`. It sets up,
+updates the Yahoo libraries once a day, and opens the app in your browser. If Windows says "Windows protected your PC",
+click **More info**, then **Run anyway** (the script is not code-signed). Tested and working on Windows.
+
 ### Mac
 ```bash
 git clone https://github.com/NakedSpaceMan/Signal-Watch.git
@@ -54,8 +65,8 @@ cd Signal-Watch
 bash start_signal_watch.sh
 ```
 
-### Windows (through WSL 2, the tested route)
-Open your Ubuntu (WSL) terminal, then:
+### Windows with WSL 2 (alternative)
+Only needed if you prefer a Linux environment on Windows. Open your Ubuntu (WSL) terminal, then:
 ```bash
 sudo apt install python3 python3-venv python3-pip git   # first time only
 git clone https://github.com/NakedSpaceMan/Signal-Watch.git
@@ -63,15 +74,6 @@ cd Signal-Watch
 bash start_signal_watch.sh
 ```
 Your Windows browser opens by itself. If it doesn't, open <http://localhost:8501>.
-
-### Windows without WSL (being tested)
-Install Python 3.10+ from <https://www.python.org/downloads/> (tick **Add python.exe to PATH**), then:
-```powershell
-git clone https://github.com/NakedSpaceMan/Signal-Watch.git
-cd Signal-Watch
-start_signal_watch.bat
-```
-You can also just double-click `start_signal_watch.bat`. It sets up, updates the Yahoo libraries once a day, and opens the app.
 
 Stop the app with **Ctrl+C** in the terminal. After you update the code, Streamlit usually shows a "Source file changed" banner: click **Rerun** (or **Always rerun**) to load it. Restart the app after adding a new file or changing `.streamlit/config.toml` (which hides the Deploy button).
 

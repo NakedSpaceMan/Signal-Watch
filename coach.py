@@ -31,7 +31,7 @@ TRADING_DAY = [
     ("catalyst", "Look for ideas (only if weather is not Stormy and I have an open slot)",
      "Check each pick's news and earnings date. Skip it if earnings are close or headlines mention an offering."),
     ("decide", "Decide and buy safely",
-     "Decide on at most 1 or 2 trades and write one line on why in the Notes box."),
+     "Decide on at most 1 or 2 trades. Optional: add a line on why in the Notes box when you record the trade."),
     ("buy", "Decide and buy safely",
      "If I bought: place the stop order right away, then record the trade here with its stop and target."),
     ("close", "End of day",
@@ -165,8 +165,8 @@ def weekly_review(closed, tx, week_start, counts=None, account_value=0.0, risk_p
                 "You wrote a reason for every buy. That makes this review meaningful and trains good judgment.")
         else:
             add("notes", "Wrote down why", "work",
-                f"{blank} of {len(buys)} buys had no 'why' note.",
-                "One sentence is enough, like 'pullback to the 20 EMA, uptrend, no earnings soon'.")
+                f"{blank} of {len(buys)} buys had no 'why' note (optional, but it helps).",
+                "If you want to, one sentence is enough, like 'pullback to the 20 EMA, uptrend, no earnings soon'.")
 
     # 5. not holding losers longer than winners
     if len(wins) and len(losses):
