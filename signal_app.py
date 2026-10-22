@@ -676,12 +676,12 @@ PAST_TIPS = {
 
 def show_plan(plan, info, acct):
     st.markdown("#### Combined plan: what you could take together")
-    st.caption(
+    st.caption(esc_md(
         f"Cash available to invest: ${info['cash']:.2f}. Risk budget left: ${info['daily_left']:.2f} "
         f"(your ${acct.daily_risk:.2f} limit, minus ${info['open_risk']:.2f} risk on what you own"
         + (f", minus ${info['loss_today']:.2f} lost today" if info["loss_today"] else "")
         + f"). Per trade: ${info['per_trade']:.2f}. Biggest single position: ${info['max_cost']:.2f}. "
-        + ("" if info["slots"] >= 10 ** 6 else f"Open slots: {info['slots']}."))
+        + ("" if info["slots"] >= 10 ** 6 else f"Open slots: {info['slots']}.")))
     if plan.empty:
         st.info("Nothing fits your limits right now. Common reasons: the budget is used up by positions you own, "
                 "shares cost too much for the position cap, or stops are too wide for the per-trade risk. "

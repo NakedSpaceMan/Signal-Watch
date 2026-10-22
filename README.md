@@ -16,6 +16,17 @@ practice charts. It is built with Python and Streamlit.
 > wrong or missing. The app **never connects to a brokerage and never places orders**. Your trades and settings
 > stay in files on your own computer.
 
+## Screenshots
+
+![The Scanner tab: a ranked list of swing setups and a combined plan sized to your account](screenshots/scanner.png)
+*Scanner: setups ranked and sized to your own account and risk limits.*
+
+![The Chart tab: daily candles with moving averages, volume, RSI and pullback markers](screenshots/chart.png)
+*Chart: hover any marker to learn what it means.*
+
+![The Backtest tab: an account balance replayed with real limits, next to simply buying SPY](screenshots/backtest.png)
+*Backtest: an illustration of how the rules behaved on past data, not a prediction. Past results do not promise anything.*
+
 ## What it does
 
 - **Chart tab:** swing (daily) chart and live intraday chart, hover-to-learn markers, Buy / Hold / Sell verdict with reasons,
@@ -99,9 +110,16 @@ you can [buy me a coffee](https://buymeacoffee.com/signal.watch). Totally option
 advice, signals or support, and it is not an investment of any kind.
 
 ## Known limits
+- **Backtests are not proof.** They use today's list of stocks (survivorship bias), look back with hindsight, and
+  assume fills that real markets do not always give. Results change a lot with small changes to the settings, and in
+  testing the edge was thin: the rules did not reliably beat simply buying an S&P 500 fund (SPY). Treat the Backtest
+  tab as a way to understand how the rules behave, not as a reason to expect profit.
+- The signal and scanner scores are rules of thumb. Their weights have not been proven to predict anything.
 - Yahoo data is unofficial and delayed; earnings dates can be estimates; Yahoo's news feed often misses big stories.
+- Yahoo may temporarily limit requests. If the app says so, wait 30 to 60 minutes before scanning again.
 - News tags are keyword-based and can misread a headline. The Verdict thresholds are rules of thumb and have not been backtested.
 - Alerts only work while the app is open.
+- Made by one person in spare time. Expect rough edges.
 
 ## License
 
