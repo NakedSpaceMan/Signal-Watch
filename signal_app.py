@@ -1925,3 +1925,8 @@ with tab_bt:
                        "Picks from today have no future days yet, so they only appear once a later session has closed.")
         elif ev is not None:
             st.info("Not enough time has passed since your scans to measure them. Check again after the next session closes.")
+
+st.sidebar.divider()
+st.sidebar.caption("Signal Watch is free and made to help people learn. If it helped, you can "
+                   "[buy me a coffee](https://buymeacoffee.com/signal.watch). Totally optional. Not financial advice: "
+                   "if you trade on it, you are on your own.")

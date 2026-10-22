@@ -89,6 +89,12 @@ Please open an **Issue** with: what you did, what you expected, what happened, a
 Useful things to try: Practice mode, Beginner mode, the Scanner, the Learn tab (try Practice trades), the News check on a few different stocks
 (including foreign ones such as RYCEY), and the Guide tab.
 
+## Support the project
+
+Signal Watch is free and always will be. If it helped you learn and you'd like to chip in toward my everyday bills,
+you can [buy me a coffee](https://buymeacoffee.com/signal.watch). Totally optional. A donation does not buy
+advice, signals or support, and it is not an investment of any kind.
+
 ## Known limits
 - Yahoo data is unofficial and delayed; earnings dates can be estimates; Yahoo's news feed often misses big stories.
 - News tags are keyword-based and can misread a headline. The Verdict thresholds are rules of thumb and have not been backtested.
