@@ -30,7 +30,7 @@ import signal_overlay as so
 class BTParams:
     setups: tuple = ("pullback", "breakout", "bounce")
     stop_atr_mult: float = 2.0
-    reward_risk: float = 2.0
+    reward_risk: float = 1.5
     max_hold: int = 15          # trading days before a stale trade is closed at the close
     cost_pct: float = 0.2       # round-trip fees + slippage, percent of the position
 

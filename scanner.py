@@ -1203,7 +1203,7 @@ class SwingCriteria:
     breakout_days: int = 20              # breakout = close above the prior N-day high
     breakout_rvol: float = 1.5           # ...on at least this multiple of average daily volume
     stop_atr_mult: float = 2.0           # suggested stop = price - this many ATRs
-    reward_risk: float = 2.0             # suggested target = this many times the risk
+    reward_risk: float = 1.5             # suggested target = this many times the risk
     risk_dollars: float = 0.0            # if > 0, show shares so a stop-out loses about this much
     universe_size: int = 500
     min_dollar_volume: float = 10_000_000  # 30-day average dollars traded per day
@@ -1397,7 +1397,7 @@ class Account:
     max_positions: int = 3          # most NEW positions in today's plan
     fractional: bool = False        # allow fractional shares
     stop_atr_mult: float = 2.0      # stop distance when results carry ATR % but no stop
-    reward_risk: float = 2.0
+    reward_risk: float = 1.5
     pct_stop: float = 0.0           # momentum scanner: stop this % below price (0 = not set, no sizing)
     # portfolio state, filled in from the trade ledger by the app:
     cash_available: float = None    # None = assume the whole account value is cash

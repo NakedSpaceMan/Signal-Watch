@@ -142,7 +142,7 @@ st.sidebar.header("Trade levels")
 stop_mult = st.sidebar.number_input("Stop = ATRs below price", min_value=0.5, max_value=6.0, step=0.5,
                                     value=float(_saved.get("stop_mult", 2.0)))
 reward_risk = st.sidebar.number_input("Target = x times risk", min_value=0.5, max_value=6.0, step=0.5,
-                                      value=float(_saved.get("reward_risk", 2.0)))
+                                      value=float(_saved.get("reward_risk", 1.5)))
 
 if st.sidebar.button("Save these settings"):
     try:
@@ -344,6 +344,33 @@ b.onclick = () => {{
   else {{ fallback(); }}
 }};
 </script>""", height=46)
+
+
+BACKTEST_UNIVERSE_FILE = Path(__file__).with_name("backtest_universe.json")
+
+
+def _load_backtest_universe():
+    try:
+        d = json.loads(BACKTEST_UNIVERSE_FILE.read_text())
+        return d if d.get("symbols") else None
+    except Exception:
+        return None
+
+
+def _backtest_universe(n, refresh=False):
+    """
+    The stocks to backtest. Yahoo's 'most traded' list changes every day (and through the day), so a new list each
+    run made every test a different set of stocks. Save the list and reuse it until a fresh one is asked for.
+    """
+    saved = _load_backtest_universe()
+    if saved and not refresh and saved.get("n") == n:
+        return list(saved["symbols"])
+    syms = [s for s, _ in sc.steady_universe(sc.SwingCriteria(universe_size=n))]
+    try:
+        BACKTEST_UNIVERSE_FILE.write_text(json.dumps({"n": n, "date": str(pd.Timestamp.now().date()), "symbols": syms}))
+    except Exception:
+        pass
+    return syms
 
 
 def show_chart(fig, key):
@@ -1794,6 +1821,16 @@ with tab_bt:
     u1, u2 = st.columns(2)
     bt_universe = u1.selectbox("Stocks to test", ["My symbols (watchlists / typed below)", "Top liquid US stocks"])
     bt_n = u2.number_input("How many top liquid stocks", min_value=20, max_value=500, value=100, step=20)
+    bt_refresh = st.checkbox("Get a fresh list of top liquid stocks", value=False,
+                             help="By default the backtest reuses the same saved list of stocks every time, so you can "
+                                  "change one rule and fairly compare the result. Yahoo's list of most-traded stocks "
+                                  "changes every day, so a fresh list tests a different set of stocks and the numbers "
+                                  "will move even if you change nothing else. Tick this only when you want a new list; "
+                                  "it saves the new one.")
+    _saved_u = _load_backtest_universe()
+    if bt_universe.startswith("Top") and _saved_u and not bt_refresh:
+        st.caption(f"Using the saved list of {len(_saved_u['symbols'])} stocks from {_saved_u['date']}, so every run "
+                   "tests the same stocks.")
     bt_typed = st.text_input("Symbols for 'My symbols' (comma-separated)", value="")
     split_date = st.date_input("Split date: results before vs after (check the rules on newer data)",
                                value=(pd.Timestamp.now() - pd.DateOffset(years=1)).date())
@@ -1803,7 +1840,7 @@ with tab_bt:
             syms = sorted({s for lst in store.watchlists().values() for s in lst})
         try:
             if bt_universe.startswith("Top"):
-                syms = [s for s, _ in sc.steady_universe(sc.SwingCriteria(universe_size=int(bt_n)))]
+                syms = _backtest_universe(int(bt_n), bool(bt_refresh))
             if not syms:
                 st.error("Enter some symbols, or choose 'Top liquid US stocks'.")
             else:
