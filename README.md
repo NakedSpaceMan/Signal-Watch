@@ -99,3 +99,8 @@ advice, signals or support, and it is not an investment of any kind.
 - Yahoo data is unofficial and delayed; earnings dates can be estimates; Yahoo's news feed often misses big stories.
 - News tags are keyword-based and can misread a headline. The Verdict thresholds are rules of thumb and have not been backtested.
 - Alerts only work while the app is open.
+
+## License
+
+MIT License. Copyright (c) 2026 Trevor Salazar. Free to use, change and share, with no warranty. See the
+[LICENSE](LICENSE) file.
