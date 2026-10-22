@@ -21,6 +21,35 @@ SKY = "#7DB3F0"       # neutral information
 
 WEATHER_COLOURS = {"success": GAIN, "info": SKY, "warning": BEACON, "error": LOSS}
 
+CONFIG_TOML = f"""[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "dark"
+primaryColor = "{BEACON}"
+backgroundColor = "{NIGHT}"
+secondaryBackgroundColor = "{HARBOR}"
+textColor = "{FOG}"
+"""
+
+
+def ensure_config(app_file):
+    """
+    Streamlit only reads colours from .streamlit/config.toml. If that hidden file didn't get copied along with
+    the app, write it. Returns True if it was just created (the app must be restarted once to pick it up).
+    """
+    from pathlib import Path
+    cfg = Path(app_file).with_name(".streamlit") / "config.toml"
+    if cfg.exists():
+        return False
+    try:
+        cfg.parent.mkdir(exist_ok=True)
+        cfg.write_text(CONFIG_TOML)
+        return True
+    except Exception:
+        return False
+
+
 CSS = f"""
 @import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap');
 
