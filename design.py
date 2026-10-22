@@ -218,7 +218,9 @@ button[kind="primary"] p, [data-testid="stBaseButton-primary"] p {{ color: var(-
 [data-testid="stAlert"] {{ border-radius: 12px; }}
 [data-testid="stExpander"] {{ border: 1px solid var(--sw-tide); border-radius: 12px; background: var(--sw-harbor); }}
 [data-testid="stMetric"] {{ background: var(--sw-harbor); border: 1px solid var(--sw-tide); border-radius: 12px;
-  padding: 12px 16px; }}
+  padding: 12px 16px; box-sizing: border-box; }}
+/* Same height for every number card, with or without the small badge under the value */
+@media (min-width: 641px) {{ [data-testid="stMetric"] {{ min-height: 11.8rem; }} }}
 [data-testid="stSidebar"] {{ border-right: 1px solid var(--sw-tide); }}
 [data-testid="stDataFrame"] {{ border-radius: 10px; }}
 
